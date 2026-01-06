@@ -93,10 +93,6 @@ def load_firmware(
             ):
             prints.debug("BootROM did not meet size requirements!")
             return False
-    else:
-        if len(fw_data) < mem_map_list["FLASH_BROM"]["size"]:
-            zeros_to_add = mem_map_list["FLASH_BROM"]["size"] - len(rom_data)
-            rom_data = rom_data + b'\x00' * zeros_to_add
 
 
     # Load RO+RW into a temp var for size calculation.
@@ -112,10 +108,6 @@ def load_firmware(
                 (mem_map_list["FLASH_PROG"]["size"])
         ):
             return False
-    else:
-        if len(fw_data) < mem_map_list["FLASH_PROG"]["size"]:
-            zeros_to_add = mem_map_list["FLASH_PROG"]["size"] - len(fw_data)
-            fw_data = fw_data + b'\x00' * zeros_to_add
 
     # Load BootROM into FLASH_BROM
     g_uc().mem_write(mem_map_list["FLASH_BROM"]["base_addr"], 
