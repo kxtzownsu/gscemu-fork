@@ -9,6 +9,7 @@ used to log many operations in the emulator.
 
 import inspect
 import os
+
 from termcolor import colored as colored_text
 
 # Colors that define the printed color to the terminal based on print type.
@@ -58,9 +59,8 @@ class GscemuLogger:
     Attributes:
         settings: 
             Contains a GscemuLoggerSettings object.
-        caller:
-            Contains a string containing the caller filename, for example, 
-            "gpio.py".
+        caller_override:
+            Override the detected caller filename, for example, "gpio.py".
     """
 
     def __init__(

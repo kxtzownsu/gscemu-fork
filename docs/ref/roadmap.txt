@@ -70,4 +70,4 @@ threaded:
 non-threaded:
 	GLOBALSEC
 	M3
-	FUSE # its just some hardcoded values in registers, no need to add unnecessary complexity
+	FUSE // its just some hardcoded values in registers, no need to add unnecessary complexity

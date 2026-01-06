@@ -18,8 +18,12 @@ from src.emulators.haven import Emulator as havnEmulator
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
+# TODO(appleflyer): implement arg system
 def main():
-    chipemu = havnEmulator()
+    chipemu = havnEmulator(
+        GSCEMULATOR_FW_PATHS,
+        GSCEMULATOR_FW_STRICT_SIZE_CHECKING
+    )
     chipemu.start_emulation()
 
 main()
