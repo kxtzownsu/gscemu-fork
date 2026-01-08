@@ -10,6 +10,7 @@ to the user. We could make a seperate class in the future instead?
 
 import unicorn as qemu
 
+from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 from .registers import REG_DEFS
@@ -18,6 +19,8 @@ from .registers import REG_DEFS
 from src.components.globalsec import component_handler as globalsec_handler
 from src.components.fuse import component_handler as fuse_handler
 from src.components.m3 import component_handler as m3_handler
+from src.components.keymgr import component_handler as keymgr_handler
+from src.components.flash import component_handler as flash_handler
 
 # Components with multiple instances should be handled this way. We do not want
 # to neglect speed just because a component has multiple instances. For example,
@@ -29,6 +32,7 @@ from src.components.uart import component2_handler as uart2_handler
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
+_MEM_IO_HANDLER_MAP = {} # Dynamically populated dictionary.
 MEM_IO_HANDLERS = {
     "UART0": uart0_handler,
     "UART1": uart1_handler,
@@ -36,7 +40,19 @@ MEM_IO_HANDLERS = {
     "GLOBALSEC": globalsec_handler,
     "FUSE0": fuse_handler,
     "M3": m3_handler,
+    "KEYMGR0": keymgr_handler,
+    "FLASH0": flash_handler,
 }
+
+# For every single address that can exist for a component, link that address
+# to it's respective component handler.
+for k, v in MEM_IO_HANDLERS.items():
+    base = REG_DEFS[k]["base_addr"]
+    size = REG_DEFS[k]["size"]
+    for offset in range(0, size, 4):
+        _MEM_IO_HANDLER_MAP[base + offset] = v
+
+prints.debug(f"{len(_MEM_IO_HANDLER_MAP)} dict pairs created for MEM_IO_MAP")
 
 # TODO(appleflyer): hook up with M3 component in the future for interrupts.
 def mem_invalid_access(uc: qemu.Uc,
@@ -57,9 +73,7 @@ def mem_invalid_access(uc: qemu.Uc,
         f"with address=0x{address:08x}, size={size}")
     return False
 
-# We need a better way to handle this. This loops through one dictionary, and
-# accesses another large dictionary which is inefficient.
-# Hopefully we could do some init optimizations to make this faster.
+# Lookup the requested address in a dictionary for O(1) lookup time.
 def mem_io_operation(uc: qemu.Uc,
                       access,
                       address: int,
@@ -67,9 +81,15 @@ def mem_io_operation(uc: qemu.Uc,
                       value: int,
                       user_data
                     ) -> bool:
-    for handler_name, handler_fn in MEM_IO_HANDLERS.items():
-        if (
-            REG_DEFS[handler_name]["base_addr"] <= address < \
-            REG_DEFS[handler_name]["base_addr"] + REG_DEFS[handler_name]["size"]
-        ):
-            return handler_fn(uc, access, address, size, value, user_data)
+    handler = _MEM_IO_HANDLER_MAP.get(address)
+    if handler:
+        return handler(uc, access, address, size, value, user_data)
+    
+    return False
+        
+def instruction_tick(uc: qemu.Uc, address: int, size: int, user_data):
+    #print(hex(address))
+
+    # if address == 0x474:
+    #     print(hex(ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_R4)))
+    pass

@@ -32,17 +32,11 @@ def component_handler(uc: qemu.Uc,
     # don't, just return a blanked FUSE value.
     try:
         # FUSE register in our list of known fuse values, return our known val.
-        ucmutex().mem_write(
-            address, 
-            (DEFAULT_FUSE_VALUES[reg_offset]).to_bytes(4, 'little')
-        )
+        ucmutex().int32_mem_write(address, DEFAULT_FUSE_VALUES[reg_offset])
 
     except KeyError:
         # FUSE register not in our list of known fuse values, give a blank fuse.
-        ucmutex().mem_write(
-            address, 
-            (0x55555555).to_bytes(4, 'little')
-        )
+        ucmutex().int32_mem_write(address, 0x55555555)
 
     return True
         

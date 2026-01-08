@@ -1,0 +1,361 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2025 HavenOverflow/appleflyer
+
+import unicorn as qemu
+import queue
+import threading
+import struct
+import hashlib
+import hmac
+
+from lib.globalvars import *
+from env import *
+from lib.threadutils import FifoLock
+from lib.logger import GscemuLogger
+from src.emulators.haven.registers import REG_DEFS, KEYMGR_REGS
+from lib.helpers import unhandled_register_exit, unhandled_register_io, BIT
+
+prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
+
+_REG_BASE_ADDR = REG_DEFS["KEYMGR0"]["base_addr"]
+
+class ShaEngine:
+    def __init__(self):
+        self.opqueue = queue.Queue()
+        self.opthread = None
+
+        self.recieve_data = False # Used for LIVESTREAM mode
+        self.start_hash = False
+
+        self.itop = 0
+        self.trig = 0
+
+        self.msglen_lo = 0
+        self.msglen_hi = 0
+        self.msglen_full = 0 # Combination of LO + HI.
+        self.en = 0
+        self.wr_en = 0
+
+        self.input_fifo = bytearray()
+        self.sts_h = [0] * 8
+        self.key_w = [0] * 8
+
+    def sha_worker(self):
+        while True:
+            try:
+                # Wait for the next operation to enter the queue
+                op = self.opqueue.get()
+                target_fn, args = op
+                
+                target_fn(*args) # Splat our arguments into the target_fn
+
+                # For write operations, this doesn't do anything. For read
+                # operations, we need to tell the handler that we have written
+                # the value into the address, and execution can proceed.
+                self.opqueue.task_done()
+
+                # Now, the SHA engine needs to check if we need to proceed with
+                # any operations.
+
+                # Check if TRIG has a value. If so, we need to process that 
+                # operation.
+                if self.trig:
+                    self.trig_process()
+
+                # If LIVESTREAM is not enabled, then check if oneshot has
+                # started processing data. If so, then we check if the buffer
+                # has reached the msglen.
+                if not (self.en & 16): # BIT(4)
+                    if self.recieve_data:
+                        self.oneshot_check()
+
+                # Check if we should start hashing data now.
+                if self.start_hash:
+                    self.hash_data()
+
+            except Exception as e:
+                prints.fatal(e)
+
+    def start_worker(self):
+        if not self.opthread:
+            self.opthread = threading.Thread(target=self.sha_worker)
+            self.opthread.daemon = True
+            self.opthread.start()
+
+    def trig_process(self):
+        match self.trig:
+            case 1: # BIT(0)
+                # Enable recieving data for LIVESTREAM or oneshot.
+                self.recieve_data = True
+                self.trig &= ~1 # Clear the TRIG bit
+
+            case 2: # BIT(1)
+                # Wipe all the values in the SHA engine.
+                self.recieve_data = False
+                self.itop = 0
+                self.msglen_lo = 0
+                self.msglen_hi = 0
+                self.en = 0
+                self.wr_en = 0
+                self.input_fifo = bytearray()
+                self.sts_h = [0] * 8
+                self.key_w = [0] * 8
+
+                self.trig &= ~2 # Clear the TRIG bit
+
+            case 4: # BIT(2)
+                # Undocumented and unused TRIG value.
+                self.trig &= ~4 # Clear the TRIG bit
+
+            case 8: # BIT(3)
+                # This means the firmware has finished streaming the data to
+                # hash. We should kick off the SHA engine. This is only
+                # applicable in LIVESTREAM mode.
+
+                if self.en & 16: # BIT(4)
+                    self.recieve_data = False
+                    self.start_hash = True
+                
+                self.trig &= ~8 # Clear the TRIG bit
+            
+            case _:
+                prints.fatal("SHA_TRIG received an invalid value")
+
+    def oneshot_check(self):
+        if len(self.input_fifo) == self.msglen_full:
+            prints.debug("SHA INPUT_FIFO fully populated in oneshot mode!")
+            self.recieve_data = False
+            self.start_hash = True
+
+    def hash_data(self):
+        prints.debug("SHA engine hashing kicked off!")
+        engine = None
+        engine_settings = self.en & (2 | 32) # BIT(1) | BIT(5)
+
+        match engine_settings:
+            case 0: # SHA256
+                engine = hashlib.sha256(self.input_fifo)
+            case 2: # SHA1
+                engine = hashlib.sha1(self.input_fifo)
+            case 32: # SHA256 + HMAC
+                derived_hmac_key = bytearray()
+                for i in self.key_w:
+                    derived_hmac_key.extend(struct.pack("<I", i))
+
+                engine = hmac.new(
+                    derived_hmac_key,
+                    self.input_fifo, 
+                    hashlib.sha256
+                )
+            case _:
+                prints.fatal("unsupported ShaEngine CFG_EN state")
+            
+        digest = engine.digest()
+        for i in range(8):
+            self.sts_h[i] = int.from_bytes(digest[i*4:(i+1)*4], 'little')
+
+        if self.en & 65536: # BIT(16)
+            self.itop = 1
+
+        self.start_hash = False
+        self.input_fifo = bytearray()
+
+    def queue_read_worker_op(self, target_fn, addr: int):
+        self.opqueue.put([target_fn, (addr,)])
+        self.opqueue.join()
+        
+    def queue_write_worker_op(self, target_fn, val: int, size: int):
+        self.opqueue.put([target_fn, (val, size)])
+
+    def read_cfg_msglen_lo(self, addr: int, *args, **kwargs) -> None:
+        ucmutex().int32_mem_write(addr, self.msglen_lo)
+
+    def write_cfg_msglen_lo(self, val: int, *args, **kwargs) -> None:
+        self.msglen_lo = val
+        self.msglen_full = (self.msglen_hi << 32) | self.msglen_lo
+
+    def read_cfg_msglen_hi(self, addr: int, *args, **kwargs) -> None:
+        ucmutex().int32_mem_write(addr, self.msglen_hi)
+
+    def write_cfg_msglen_hi(self, val: int, *args, **kwargs) -> None:
+        self.msglen_hi = val
+        self.msglen_full = (self.msglen_hi << 32) | self.msglen_lo
+
+    def read_cfg_en(self, addr: int, *args, **kwargs) -> None:
+        ucmutex().int32_mem_write(addr, self.en)
+
+    def write_cfg_en(self, val: int, *args, **kwargs) -> None:
+        self.en = val
+
+    def read_cfg_wr_en(self, addr: int, *args, **kwargs) -> None:
+        ucmutex().int32_mem_write(addr, self.wr_en)
+
+    def write_cfg_wr_en(self, val: int, *args, **kwargs) -> None:
+        self.wr_en = val
+
+    def read_trig(self, addr: int, *args, **kwargs) -> None:
+        ucmutex().int32_mem_write(addr, self.trig)
+
+    def write_trig(self, val: int, *args, **kwargs) -> None:
+        self.trig = val
+
+    def read_itop(self, addr: int, *args, **kwargs) -> None:
+        ucmutex().int32_mem_write(addr, self.itop)
+
+    def write_itop(self, val: int, *args, **kwargs) -> None:
+        self.itop = val
+
+    def read_input_fifo(self, *args, **kwargs) -> None:
+        unhandled_register_io(prints, "READ", "KEYMGR0", "INPUT_FIFO")
+
+    def write_input_fifo(self, val: int, size: int, *args, **kwargs) -> None:
+        match size:
+            case 1:
+                self.input_fifo.append(val & 0xFF)
+            case 4:
+                self.input_fifo.extend(struct.pack("<I", val))
+            case _:
+                prints.warning(f"Unexpected write size={size}, ignoring val.")
+
+    def read_sts_h(self, addr: int, index: int, *args, **kwargs) -> None:
+        ucmutex().int32_mem_write(addr, self.sts_h[index])
+
+    def write_sts_h(self, val: int, index: int, *args, **kwargs) -> None:
+        unhandled_register_io(prints, "WRITE", "KEYMGR0", f"STS_H_{index}")
+
+    def read_key_w(self, addr: int, index: int, *args, **kwargs) -> None:
+        ucmutex().int32_mem_write(addr, self.key_w[index])
+
+    def write_key_w(self, val: int, index: int, *args, **kwargs) -> None:
+        self.key_w[index] = val
+
+class KeymgrController:
+    def __init__(self):
+        self.mutex = FifoLock() # Only use this for KeyManager specific ops.
+        self.shaengine = ShaEngine()
+        self.aesengine = None
+
+        self.hkey_rwr = [0] * 8
+        self.rwr_vld = 0
+        self.rwr_lock = 0
+
+        self.shaengine.start_worker()
+
+    def read_hkey_rwr(self, addr: int, index: int, *args, **kwargs) -> None:
+        with self.mutex:
+            ucmutex().int32_mem_write(addr, self.hkey_rwr[index])
+
+    def write_hkey_rwr(
+            self, val: int, size: int, index: int, *args, **kwargs
+        ) -> None:
+        with self.mutex:
+            self.hkey_rwr[index] = val
+
+    def read_rwr_vld(self, addr: int, *args, **kwargs) -> None:
+        with self.mutex:
+            ucmutex().int32_mem_write(addr, self.rwr_vld)
+
+    def write_rwr_vld(self, val: int, *args, **kwargs) -> None:
+        with self.mutex:
+            self.rwr_vld = val
+
+    def read_rwr_lock(self, addr: int, *args, **kwargs) -> None:
+        with self.mutex:
+            ucmutex().int32_mem_write(addr, self.rwr_lock)
+
+    def write_rwr_lock(self, val: int, *args, **kwargs) -> None:
+        with self.mutex:
+            self.rwr_lock = val
+
+c_emu = KeymgrController()
+
+_REG_FUNC_MAP = {
+    KEYMGR_REGS["RWR_VLD"]: [
+        c_emu.read_rwr_vld,
+        c_emu.write_rwr_vld,
+    ],
+    KEYMGR_REGS["RWR_LOCK"]: [
+        c_emu.read_rwr_lock,
+        c_emu.write_rwr_lock,
+    ],
+}
+
+_SHAENGINE_FUNC_MAP = {
+    KEYMGR_REGS["SHA"]["CFG"]["MSGLEN_LO"]: [
+        c_emu.shaengine.read_cfg_msglen_lo,
+        c_emu.shaengine.write_cfg_msglen_lo,
+    ],
+    KEYMGR_REGS["SHA"]["CFG"]["MSGLEN_HI"]: [
+        c_emu.shaengine.read_cfg_msglen_hi,
+        c_emu.shaengine.write_cfg_msglen_hi,        
+    ],
+    KEYMGR_REGS["SHA"]["CFG"]["EN"]: [
+        c_emu.shaengine.read_cfg_en,
+        c_emu.shaengine.write_cfg_en,   
+    ],
+    KEYMGR_REGS["SHA"]["CFG"]["WR_EN"]: [
+        c_emu.shaengine.read_cfg_wr_en,
+        c_emu.shaengine.write_cfg_wr_en,   
+    ],
+    KEYMGR_REGS["SHA"]["TRIG"]: [
+        c_emu.shaengine.read_trig,
+        c_emu.shaengine.write_trig,   
+    ],
+    KEYMGR_REGS["SHA"]["INPUT_FIFO"]: [
+        c_emu.shaengine.read_input_fifo,
+        c_emu.shaengine.write_input_fifo,   
+    ],
+    KEYMGR_REGS["SHA"]["ITOP"]: [
+        c_emu.shaengine.read_itop,
+        c_emu.shaengine.write_itop,   
+    ],
+}
+
+for idx, offset in enumerate(KEYMGR_REGS["HKEY_RWR"]):
+    _REG_FUNC_MAP[offset] = [
+        lambda addr, i=idx: c_emu.read_hkey_rwr(addr, i),
+        lambda val, size, i=idx: c_emu.write_hkey_rwr(val, size, i)
+    ]
+
+for idx, offset in enumerate(KEYMGR_REGS["SHA"]["STS_H"]):
+    _SHAENGINE_FUNC_MAP[offset] = [
+        lambda addr, i=idx: c_emu.shaengine.read_sts_h(addr, i),
+        lambda val, size, i=idx: c_emu.shaengine.write_sts_h(val, i)
+    ]
+
+for idx, offset in enumerate(KEYMGR_REGS["SHA"]["KEY_W"]):
+    _SHAENGINE_FUNC_MAP[offset] = [
+        lambda addr, i=idx: c_emu.shaengine.read_key_w(addr, i),
+        lambda val, size, i=idx: c_emu.shaengine.write_key_w(val, i)
+    ]
+
+# When we add the _SHAENGINE_FUNC_MAP to _REG_FUNC_MAP, we use a lambda to wrap
+# around it to call it's respective queue function.
+for k, v in _SHAENGINE_FUNC_MAP.items():
+    _REG_FUNC_MAP[k] = [
+        lambda addr, 
+        v=v: c_emu.shaengine.queue_read_worker_op(v[0], addr),
+        lambda val, 
+        size, 
+        v=v: c_emu.shaengine.queue_write_worker_op(v[1], val, size),
+    ]
+
+def component_handler(uc: qemu.Uc,
+                      access,
+                      address: int,
+                      size: int,
+                      value: int,
+                      user_data
+                      ) -> bool:
+    """Main component handler for KEYMGR"""
+
+    reg_offset = address - _REG_BASE_ADDR
+
+    try:
+        if access == qemu.UC_MEM_READ:
+            _REG_FUNC_MAP[reg_offset][0](address)
+        elif access == qemu.UC_MEM_WRITE:
+            _REG_FUNC_MAP[reg_offset][1](value, size)
+
+    except KeyError:
+        unhandled_register_exit(prints, "KEYMGR0", address)

@@ -13,6 +13,7 @@ import unicorn as qemu
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
+from .registers import REG_DEFS
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -28,7 +29,7 @@ def map_memory(mem_map_list: list) -> bool:
     try:
         for i in mem_map_list.items():
             prints.debug(f"Mapping {i[0]} with " +
-                        f"pc=0x{i[1]["base_addr"]:x}" +
+                        f"addr=0x{i[1]["base_addr"]:x}" +
                         f",size=0x{i[1]["size"]:x}")
             g_uc().mem_map(
                 i[1]["base_addr"], 
@@ -41,6 +42,16 @@ def map_memory(mem_map_list: list) -> bool:
         return False
     
     return True
+
+def prepare_info1_space() -> None:
+    """We need to fill the INFO1 space with 0xFF every initialization."""
+    g_uc().mem_write(
+        REG_DEFS["INFO1"]["base_addr"], 
+        (b'\xff' * 
+        ((REG_DEFS["INFO1"]["base_addr"] + REG_DEFS["INFO1"]["size"]) 
+          - REG_DEFS["INFO1"]["base_addr"])
+        )
+    )
 
 def load_firmware(
         mem_map_list: list, 

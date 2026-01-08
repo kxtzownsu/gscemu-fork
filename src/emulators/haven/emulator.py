@@ -65,6 +65,8 @@ class Emulator:
         if not map_memory(REG_DEFS):
             prints.fatal("Failed to map memory during init process!")
             return
+        
+        prepare_info1_space()
 
         if not load_firmware(
                 REG_DEFS, 
@@ -82,6 +84,12 @@ class Emulator:
         # handlers. Not really another way to make this more efficient, it's
         # already quite efficient as it is.
         g_uc().hook_add(UNICORN_MEM_IO_HOOKS, hooks.mem_io_operation)
+
+        # For operations such as CYCCNT incrementation, pc logging for
+        # debugging, we would need a tick hook that runs on every instruction.
+        # We should not use it to do computationally intensive operations,
+        # a small bit of code could cause a significant slowdown.
+        g_uc().hook_add(qemu.UC_HOOK_CODE, hooks.instruction_tick)
         
         # Call this after the emulator has finished initializing.
         self.initialized = True
@@ -112,8 +120,8 @@ class Emulator:
         )
 
         prints.debug(f"VTOR: pc=0x{entry_pc:x}, sp=0x{entry_sp:x}")
-        g_uc().reg_write(qemu.arm_const.UC_ARM_REG_PC, entry_pc)
         g_uc().reg_write(qemu.arm_const.UC_ARM_REG_SP, entry_sp)
+        g_uc().reg_write(qemu.arm_const.UC_ARM_REG_PC, entry_pc)
     
         prints.debug("Starting emulation at " +
                      f"pc=0x{entry_pc:x}")

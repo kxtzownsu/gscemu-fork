@@ -70,5 +70,14 @@ class UcMutex:
     def mem_write(self, *args, **kwargs):
         with self.mutex:
             return self.uc.mem_write(*args, **kwargs)
+        
+    # Non-standard helpers.
 
+    def int32_mem_read(self, address):
+        with self.mutex:
+            return int.from_bytes(self.uc.mem_read(address, 4), 'little')
+
+    def int32_mem_write(self, address, val):
+        with self.mutex:
+            return self.uc.mem_write(address, int.to_bytes(val, 4, 'little'))
 
