@@ -255,6 +255,8 @@ KEYMGR_REGS = {
     "HKEY_RWR": _reg_list(0x3000, 8),
     "RWR_VLD": 0x3020,
     "RWR_LOCK": 0x3024,
+    "CERT_REVOKE_CTRL": _reg_list(0x4a8, 3),
+    "HKEY_ERR_FLAGS": 0x3324,
 
     "SHA": {
         "CFG": {
@@ -264,20 +266,20 @@ KEYMGR_REGS = {
             "WR_EN": 0x40c,
         },
         "TRIG": 0x410,
-        # u8*11 padding of nothing?
         "INPUT_FIFO": 0x440,
         "STS_H": _reg_list(0x444, 8),
         "KEY_W": _reg_list(0x464, 8),
-        "STS": 0x484, # Unused, unimplemented
-        "ITCR": 0x488, # Unused, unimplemented
         "ITOP": 0x48c,
+
         "USE_HIDDEN_KEY": 0x490, # Unimplemented
         "USE_CERT": 0x494, # Unimplemented
         "CERT_OVERRIDE": 0x498, # Unimplemented
-        "RAND_STALL_CTL": 0x49c, # Unimplemented
+        "RAND_STALL_CTL": 0x49c, # Unimplemented, handled
+
+        "STS": 0x484, # Unused, unimplemented
+        "ITCR": 0x488, # Unused, unimplemented
         "EXECUTE_COUNT_STATE": 0x4a0, # Unused, unimplemented
         "EXECUTE_COUNT_MAX": 0x4a4, # Unused, unimplemented
-        "CERT_REVOKE_CTRL0": 0x4a8, # Unimplemented
     },
 }
 

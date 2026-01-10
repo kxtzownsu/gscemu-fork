@@ -40,6 +40,20 @@ class ShaEngine:
         self.sts_h = [0] * 8
         self.key_w = [0] * 8
 
+        self.use_cert = {
+            "INDEX": 0,
+            "ENABLE": 0,
+            "CHECK_ONLY": 0,
+        }
+        self.rand_stall_ctl = {
+            "STALL_EN": 0,
+            "FREQ": 0,
+        }
+        self.cert_override_ptr = {
+            "DIGEST": 0,
+            "KEY": 0,
+        }
+
     def sha_worker(self):
         while True:
             try:
@@ -129,6 +143,7 @@ class ShaEngine:
 
     def hash_data(self):
         prints.debug("SHA engine hashing kicked off!")
+        prints.debug(f"SHA engine running with self.en=0x{self.en:x}")
         engine = None
         engine_settings = self.en & (2 | 32) # BIT(1) | BIT(5)
 
@@ -229,11 +244,59 @@ class ShaEngine:
     def write_key_w(self, val: int, index: int, *args, **kwargs) -> None:
         self.key_w[index] = val
 
+    def read_rand_stall_ctl(self, addr: int, *args, **kwargs) -> None:
+        val = (
+            self.rand_stall_ctl["STALL_EN"] |
+            (self.rand_stall_ctl["FREQ"] << 1)
+        )
+        ucmutex().int32_mem_write(addr, val)
+
+    def write_rand_stall_ctl(self, val: int, *args, **kwargs) -> None:
+        stall_en = (val & 0x1)
+        stall_freq = (val & 0x6) >> 0x1
+
+        if stall_en:
+            # If STALL_EN, that means random nops enabled. Only accept
+            # writes to STALL_EN
+            self.rand_stall_ctl["STALL_EN"] = stall_en
+        else:
+            # STALL_EN not enabled, therefore allow writes to STALL_EN and FREQ
+            self.rand_stall_ctl["STALL_EN"] = stall_en
+            self.rand_stall_ctl["FREQ"] = stall_freq
+
+    def read_cert_override(self, addr: int, *args, **kwargs) -> None:
+        val = (
+            self.cert_override_ptr["DIGEST"] |
+            self.cert_override_ptr["KEY"] << 0x10
+        )
+        ucmutex().int32_mem_write(addr, val)
+
+    def write_cert_override(self, val: int, *args, **kwargs) -> None:        
+        self.cert_override_ptr["DIGEST"] = (val & 0x3f)
+        self.cert_override_ptr["KEY"] = (val & 0x3f0000) >> 0x10
+
+    def read_use_cert(self, addr: int, *args, **kwargs) -> None:
+        val = (
+            self.use_cert["INDEX"] |
+            self.use_cert["ENABLE"] << 0x6 |
+            self.use_cert["CHECK_ONLY"] << 0x7
+        )
+        ucmutex().int32_mem_write(addr, val)
+
+    def write_use_cert(self, val: int, *args, **kwargs) -> None:        
+        self.use_cert["INDEX"] = (val & 0x3f)
+        self.use_cert["ENABLE"] = (val & 0x40) >> 0x6
+        self.use_cert["CHECK_ONLY"] = (val & 0x80) >> 0x7
+        
 class KeymgrController:
     def __init__(self):
         self.mutex = FifoLock() # Only use this for KeyManager specific ops.
         self.shaengine = ShaEngine()
         self.aesengine = None
+
+        self.cert_revoke_ctrl = [
+            0xa8028a82, 0xaaaaaaaa, 0xaaaa
+        ]
 
         self.hkey_rwr = [0] * 8
         self.rwr_vld = 0
@@ -266,6 +329,21 @@ class KeymgrController:
     def write_rwr_lock(self, val: int, *args, **kwargs) -> None:
         with self.mutex:
             self.rwr_lock = val
+
+    def read_cert_revoke_ctrl(
+            self, addr: int, index: int, *args, **kwargs
+        ) -> None:
+        with self.mutex:
+            ucmutex().int32_mem_write(addr, self.cert_revoke_ctrl[index])
+
+    def write_cert_revoke_ctrl(
+            self, val: int, size: int, index: int, *args, **kwargs
+        ) -> None:
+        # with self.mutex:
+
+        # We should be able to write to this register, but we do not implement
+        # that for now.
+        pass
 
 c_emu = KeymgrController()
 
@@ -309,12 +387,30 @@ _SHAENGINE_FUNC_MAP = {
         c_emu.shaengine.read_itop,
         c_emu.shaengine.write_itop,   
     ],
+    KEYMGR_REGS["SHA"]["USE_CERT"]: [
+        c_emu.shaengine.read_use_cert,
+        c_emu.shaengine.write_use_cert,   
+    ],
+    KEYMGR_REGS["SHA"]["CERT_OVERRIDE"]: [
+        c_emu.shaengine.read_cert_override,
+        c_emu.shaengine.write_cert_override,
+    ],
+    KEYMGR_REGS["SHA"]["RAND_STALL_CTL"]: [
+        c_emu.shaengine.read_rand_stall_ctl,
+        c_emu.shaengine.write_rand_stall_ctl,
+    ]
 }
 
 for idx, offset in enumerate(KEYMGR_REGS["HKEY_RWR"]):
     _REG_FUNC_MAP[offset] = [
         lambda addr, i=idx: c_emu.read_hkey_rwr(addr, i),
         lambda val, size, i=idx: c_emu.write_hkey_rwr(val, size, i)
+    ]
+
+for idx, offset in enumerate(KEYMGR_REGS["CERT_REVOKE_CTRL"]):
+    _REG_FUNC_MAP[offset] = [
+        lambda addr, i=idx: c_emu.read_cert_revoke_ctrl(addr, i),
+        lambda val, size, i=idx: c_emu.write_cert_revoke_ctrl(val, size, i)
     ]
 
 for idx, offset in enumerate(KEYMGR_REGS["SHA"]["STS_H"]):
