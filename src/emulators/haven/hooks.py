@@ -86,10 +86,3 @@ def mem_io_operation(uc: qemu.Uc,
         return handler(uc, access, address, size, value, user_data)
     
     return False
-        
-def instruction_tick(uc: qemu.Uc, address: int, size: int, user_data):
-    #print(hex(address))
-
-    # if address == 0x474:
-    #     print(hex(ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_R4)))
-    pass

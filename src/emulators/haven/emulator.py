@@ -26,6 +26,8 @@ from .registers import REG_DEFS
 from lib.logger import GscemuLogger
 from lib.threadutils import UcMutex
 
+from src.components.m3 import c_emu as m3_emu
+
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class Emulator:
@@ -84,12 +86,6 @@ class Emulator:
         # handlers. Not really another way to make this more efficient, it's
         # already quite efficient as it is.
         g_uc().hook_add(UNICORN_MEM_IO_HOOKS, hooks.mem_io_operation)
-
-        # For operations such as CYCCNT incrementation, pc logging for
-        # debugging, we would need a tick hook that runs on every instruction.
-        # We should not use it to do computationally intensive operations,
-        # a small bit of code could cause a significant slowdown.
-        g_uc().hook_add(qemu.UC_HOOK_CODE, hooks.instruction_tick)
         
         # Call this after the emulator has finished initializing.
         self.initialized = True
@@ -126,6 +122,9 @@ class Emulator:
         prints.debug("Starting emulation at " +
                      f"pc=0x{entry_pc:x}")
         
+        # Start the CYCCNT timer to count how many cycles have elapsed.
+        m3_emu.start_cyccnt_time()
+
         try:
             g_uc().emu_start(entry_pc, 0xFFFFFFFF)
         except Exception as e:

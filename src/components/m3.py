@@ -7,6 +7,7 @@ Since this is the CPU, it is tightly integrated with the Uc engine. Therefore,
 this will not be threaded/queued. Instead, we will have one mutex.
 """
 
+import time
 import unicorn as qemu
 import queue
 import threading
@@ -20,6 +21,7 @@ from lib.helpers import unhandled_register_io, unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
+_CYCCNT_SPEED = (1/24000000) * 1000000000
 _REG_BASE_ADDR = REG_DEFS["M3"]["base_addr"]
 
 class ArmSC300:
@@ -27,16 +29,14 @@ class ArmSC300:
         self.mutex = FifoLock()
         self.cpuid = 0x410fc331 # Known CPUID for the ArmSC300
 
-        self.dwt_cyccnt_lock = threading.Lock() # Use a seperate lock for speed.
-        self.dwt_cyccnt = 0
+        self.cyccnt_time_start = 0
         self.itcmcr = 0
         self.demcr = 0
         self.dwt_ctrl = 0
         self.vtor = 0
 
-    def increment_cyccnt(self) -> None:
-        with self.dwt_cyccnt_lock:
-            self.dwt_cyccnt += 1
+    def start_cyccnt_time(self) -> None:
+        self.cyccnt_time_start = time.perf_counter_ns()
 
     def read_demcr(self, addr: int) -> None:
         with self.mutex:
@@ -80,8 +80,11 @@ class ArmSC300:
 
     def read_dwt_cyccnt(self, addr: int) -> None:
         with self.mutex:
-            with self.dwt_cyccnt_lock:
-                ucmutex().int32_mem_write(addr, self.dwt_cyccnt)
+            val = int(
+                (time.perf_counter_ns() - self.cyccnt_time_start) 
+                // _CYCCNT_SPEED
+            )
+            ucmutex().int32_mem_write(addr, val)
 
     def write_dwt_cyccnt(self, val: int) -> None:
         unhandled_register_io(prints, "WRITE", "M3", "DWT_CYCCNT")

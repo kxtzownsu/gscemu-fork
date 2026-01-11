@@ -146,6 +146,8 @@ GLOBALSEC_REGS = {
     "SB_BL_SIG": _reg_list(0x1004, 8),
     "SIG_UNLOCK": 0x1024,
 
+    "HIDE_ROM": 0x40d0,
+
     "ALERT": {
         "CFG_LOCK": 0x102c,
         "FW_TRIGGER": 0x4000,

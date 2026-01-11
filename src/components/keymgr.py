@@ -99,8 +99,16 @@ class ShaEngine:
     def trig_process(self):
         match self.trig:
             case 1: # BIT(0)
-                # Enable recieving data for LIVESTREAM or oneshot.
-                self.recieve_data = True
+                # If this is a USE_CERT operation, just ignore it and say
+                # the op is done.
+                if self.use_cert["ENABLE"]:
+                    self.use_cert["ENABLE"] = 0
+                    self.itop = 1
+                else:
+                    # Not a USE_CERT operation.
+                    # Enable recieving data for LIVESTREAM or oneshot.
+                    self.recieve_data = True
+
                 self.trig &= ~1 # Clear the TRIG bit
 
             case 2: # BIT(1)
@@ -186,6 +194,9 @@ class ShaEngine:
         ucmutex().int32_mem_write(addr, self.msglen_lo)
 
     def write_cfg_msglen_lo(self, val: int, *args, **kwargs) -> None:
+        if self.recieve_data:
+            return
+        
         self.msglen_lo = val
         self.msglen_full = (self.msglen_hi << 32) | self.msglen_lo
 
@@ -193,6 +204,9 @@ class ShaEngine:
         ucmutex().int32_mem_write(addr, self.msglen_hi)
 
     def write_cfg_msglen_hi(self, val: int, *args, **kwargs) -> None:
+        if self.recieve_data:
+            return
+        
         self.msglen_hi = val
         self.msglen_full = (self.msglen_hi << 32) | self.msglen_lo
 
@@ -200,6 +214,9 @@ class ShaEngine:
         ucmutex().int32_mem_write(addr, self.en)
 
     def write_cfg_en(self, val: int, *args, **kwargs) -> None:
+        if self.recieve_data:
+            return
+        
         self.en = val
 
     def read_cfg_wr_en(self, addr: int, *args, **kwargs) -> None:
@@ -220,10 +237,14 @@ class ShaEngine:
     def write_itop(self, val: int, *args, **kwargs) -> None:
         self.itop = val
 
-    def read_input_fifo(self, *args, **kwargs) -> None:
+    def read_input_fifo(self, addr, *args, **kwargs) -> None:
         unhandled_register_io(prints, "READ", "KEYMGR0", "INPUT_FIFO")
+        ucmutex().int32_mem_write(addr, 0)
 
     def write_input_fifo(self, val: int, size: int, *args, **kwargs) -> None:
+        if not self.recieve_data:
+            return
+        
         match size:
             case 1:
                 self.input_fifo.append(val & 0xFF)
@@ -299,6 +320,8 @@ class KeymgrController:
         ]
 
         self.hkey_rwr = [0] * 8
+        self.hkey_err_flags = 0
+
         self.rwr_vld = 0
         self.rwr_lock = 0
 
@@ -313,6 +336,14 @@ class KeymgrController:
         ) -> None:
         with self.mutex:
             self.hkey_rwr[index] = val
+
+    def read_hkey_err_flags(self, addr: int, *args, **kwargs) -> None:
+        with self.mutex:
+            ucmutex().int32_mem_write(addr, self.hkey_err_flags)
+
+    def write_hkey_err_flags(self, val: int, *args, **kwargs) -> None:
+        with self.mutex:
+            self.hkey_err_flags = val
 
     def read_rwr_vld(self, addr: int, *args, **kwargs) -> None:
         with self.mutex:
@@ -356,6 +387,10 @@ _REG_FUNC_MAP = {
         c_emu.read_rwr_lock,
         c_emu.write_rwr_lock,
     ],
+    KEYMGR_REGS["HKEY_ERR_FLAGS"]: [
+        c_emu.read_hkey_err_flags,
+        c_emu.write_hkey_err_flags,
+    ],
 }
 
 _SHAENGINE_FUNC_MAP = {
@@ -398,7 +433,7 @@ _SHAENGINE_FUNC_MAP = {
     KEYMGR_REGS["SHA"]["RAND_STALL_CTL"]: [
         c_emu.shaengine.read_rand_stall_ctl,
         c_emu.shaengine.write_rand_stall_ctl,
-    ]
+    ],
 }
 
 for idx, offset in enumerate(KEYMGR_REGS["HKEY_RWR"]):

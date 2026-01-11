@@ -27,6 +27,9 @@ def halt_emulation():
     if ucmutex():
         with ucmutex().mutex:
             g_uc().emu_stop()
-            prints.debug("Emulation forcefully halted!")
+            prints.debug(
+                "Emulation forcefully halted at " +
+                f"pc=0x{g_uc().reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
+            )
     else:
         prints.warning("halt_emulation called whilst UcMutex uninitialized!")

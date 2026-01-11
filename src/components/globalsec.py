@@ -26,6 +26,9 @@ class HavenGlobalsec:
     def __init__(self):
         self.mutex = FifoLock()
 
+        # HIDE_ROM doesn't do anything as far as we know, so don't do anything.
+        self.hide_rom = 0 
+
         self.dbg_control = 0
         self.dummykey = [0] * 3
 
@@ -294,6 +297,7 @@ class HavenGlobalsec:
     def read_sig_unlock(self, addr: int) -> None:
         with self.mutex:
             unhandled_register_io(prints, "READ", "GLOBALSEC", "SIG_UNLOCK")
+            ucmutex().int32_mem_write(addr, 0)
 
     def write_sig_unlock(self, val: int) -> None:
         with self.mutex:
@@ -311,6 +315,18 @@ class HavenGlobalsec:
     def write_dbg_control(self, val: int) -> None:
         with self.mutex:
             self.dbg_control = val
+
+    def read_hide_rom(self, addr: int) -> None:
+        with self.mutex:
+            ucmutex().int32_mem_write(addr, self.hide_rom)
+
+    def write_hide_rom(self, val: int) -> None:
+        with self.mutex:
+            # We know that the Cr50 does not allow HIDE_ROM to change
+            # after it has a value.
+            if self.hide_rom:
+                return
+            self.hide_rom = val
 
     def read_region_register(self, 
                              addr: int, 
@@ -385,6 +401,9 @@ _REG_FUNC_MAP = {
         c_emu.write_permission_runlevel(reg_offset, val),
     ],
 
+    GLOBALSEC_REGS["HIDE_ROM"]: [
+        c_emu.read_hide_rom, c_emu.write_hide_rom
+    ],
     GLOBALSEC_REGS["SIG_UNLOCK"]: [
         c_emu.read_sig_unlock, c_emu.write_sig_unlock
     ],

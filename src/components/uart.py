@@ -21,6 +21,8 @@ class UartController:
         self.opthread = None
         self.opqueue = queue.Queue()
 
+        self.input_queue = queue.Queue()
+
         # TX cannot be ready until CTRL is set. CTRL is 0 by default.
         self.state = 1 # BIT(0)
 
@@ -33,6 +35,12 @@ class UartController:
                 # Wait for the next operation to enter the queue
                 op = self.opqueue.get()
                 target_fn, args = op
+
+                # update STATE based on input queue
+                if self.input_queue.empty():
+                    self.state |= BIT(7) # True
+                else:
+                    self.state &= ~BIT(7) # False
 
                 target_fn(*args) # Splat the arguments into the target_fn
 
@@ -75,8 +83,9 @@ class UartController:
     def queue_write_worker_op(self, target_fn, val: int):
         self.opqueue.put([target_fn, (val,)])
 
-    def read_wdata(self, *args, **kwargs) -> None:
-        unhandled_register_io(prints, "WRITE", "UART0", "WDATA")
+    def read_wdata(self, addr, *args, **kwargs) -> None:
+        unhandled_register_io(prints, "READ", "UART0", "WDATA")
+        ucmutex().int32_mem_write(addr, 0)
 
     def write_wdata(self, val: int, *args, **kwargs) -> None:
         if not (self.state & BIT(0)):
@@ -106,6 +115,18 @@ class UartController:
     def write_state(self, val: int, *args, **kwargs) -> None:
         self.state = val
 
+    def read_rdata(self, addr: int, *args, **kwargs) -> None:
+        try:
+            char = self.input_queue.get_nowait()
+        except queue.Empty:
+            prints.warning("RDATA read when no available chars!")
+            char = 0
+
+        ucmutex().int32_mem_write(addr, char)
+
+    def write_rdata(self, val: int, *args, **kwargs) -> None:
+        unhandled_register_io(prints, "WRITE", "UART0", "RDATA")
+
 c_emu = UartController()
 c_emu.start_worker()
 
@@ -114,6 +135,7 @@ _REG_FUNC_MAP = {
     UART_REGS["NCO"]: [c_emu.read_nco, c_emu.write_nco],
     UART_REGS["CTRL"]: [c_emu.read_ctrl, c_emu.write_ctrl],
     UART_REGS["STATE"]: [c_emu.read_state, c_emu.write_state],
+    UART_REGS["RDATA"]: [c_emu.read_rdata, c_emu.read_rdata],
 }
 
 def component_handler(instance: int,
