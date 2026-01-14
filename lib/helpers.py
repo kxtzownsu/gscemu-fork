@@ -9,18 +9,20 @@ prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 def BIT(bit) -> int:
     return 1 << bit
 
-def unhandled_register_exit(logger: GscemuLogger, 
-                            component: str, 
-                            address: int
-                            ) -> None:
+def unhandled_register_exit(
+    logger: GscemuLogger, 
+    component: str, 
+    address: int
+) -> None:
     logger.fatal(f"Unhandled register 0x{address:x} in component {component}!")
     halt_emulation()
 
-def unhandled_register_io(logger: GscemuLogger, 
-                          io_type: str, 
-                          component: str, 
-                          subcomponent: str
-                          ) -> None:
+def unhandled_register_io(
+    logger: GscemuLogger, 
+    io_type: str, 
+    component: str, 
+    subcomponent: str
+) -> None:
     logger.warning(f"Unhandled {io_type} to {component}, {subcomponent}!")
 
 def halt_emulation():

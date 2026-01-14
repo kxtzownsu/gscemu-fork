@@ -13,13 +13,14 @@ prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 _REG_BASE_ADDR = REG_DEFS["FUSE0"]["base_addr"]
 
-def component_handler(uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                      ) -> bool:
+def component_handler(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     reg_offset = address - _REG_BASE_ADDR
 
     # As of now, FUSE only accepts read operations, not write operations. It is

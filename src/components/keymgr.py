@@ -471,13 +471,14 @@ for k, v in _SHAENGINE_FUNC_MAP.items():
         v=v: c_emu.shaengine.queue_write_worker_op(v[1], val, size),
     ]
 
-def component_handler(uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                      ) -> bool:
+def component_handler(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     """Main component handler for KEYMGR"""
 
     reg_offset = address - _REG_BASE_ADDR

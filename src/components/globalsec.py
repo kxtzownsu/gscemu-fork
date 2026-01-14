@@ -501,13 +501,14 @@ for idx, offset in enumerate(GLOBALSEC_REGS["SB_BL_SIG"]):
         lambda val, i=idx: c_emu.write_sb_bl_sig(val, i)
     ]
 
-def component_handler(uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                      ) -> bool:
+def component_handler(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     """Main component handler for GLOBALSEC"""
 
     reg_offset = address - _REG_BASE_ADDR

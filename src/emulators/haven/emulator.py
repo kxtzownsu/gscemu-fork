@@ -34,10 +34,10 @@ class Emulator:
     """Emulator object for the haven chip."""
     
     def __init__(
-            self, 
-            fw_paths: dict, 
-            strict_fw_size_checks: bool
-        ) -> None:
+        self, 
+        fw_paths: dict, 
+        strict_fw_size_checks: bool
+    ) -> None:
         """Initializes the emulator.
         
         Initializes all the components of the emulator like the unicorn engine,

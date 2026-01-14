@@ -55,13 +55,14 @@ for k, v in MEM_IO_HANDLERS.items():
 prints.debug(f"{len(_MEM_IO_HANDLER_MAP)} dict pairs created for MEM_IO_MAP")
 
 # TODO(appleflyer): hook up with M3 component in the future for interrupts.
-def mem_invalid_access(uc: qemu.Uc,
-                        access,
-                        address: int,
-                        size: int,
-                        value: int,
-                        user_data
-                      ) -> bool:
+def mem_invalid_access(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     kind = {
         qemu.UC_MEM_READ_UNMAPPED: "READ", 
         qemu.UC_MEM_WRITE_UNMAPPED: "WRITE", 
@@ -74,13 +75,14 @@ def mem_invalid_access(uc: qemu.Uc,
     return False
 
 # Lookup the requested address in a dictionary for O(1) lookup time.
-def mem_io_operation(uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                    ) -> bool:
+def mem_io_operation(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     handler = _MEM_IO_HANDLER_MAP.get(address)
     if handler:
         return handler(uc, access, address, size, value, user_data)

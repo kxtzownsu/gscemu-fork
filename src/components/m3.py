@@ -100,13 +100,14 @@ _REG_FUNC_MAP = {
     M3_REGS["VTOR"]: [c_emu.read_vtor, c_emu.write_vtor],
 }
 
-def component_handler(uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                      ) -> bool:
+def component_handler(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     """Main component handler for M3"""
 
     reg_offset = address - _REG_BASE_ADDR

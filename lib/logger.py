@@ -64,10 +64,10 @@ class GscemuLogger:
     """
 
     def __init__(
-            self,
-            print_settings: GscemuLoggerSettings, 
-            caller_override: str | None = None,
-        ) -> None:
+        self,
+        print_settings: GscemuLoggerSettings, 
+        caller_override: str | None = None,
+    ) -> None:
         """Initializes the GscemuLogger object.
 
         Args:

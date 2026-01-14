@@ -355,13 +355,14 @@ for idx, offset in enumerate(FLASH_REGS["WR_DATA"]):
         lambda val, i=idx: c_emu.write_wr_data(val, i)
     ]
 
-def component_handler(uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                      ) -> bool:
+def component_handler(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     """Main component handler for FLASH"""
 
     # If we do intend to support UART1 and 2, this code needs to be refactored

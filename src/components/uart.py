@@ -138,14 +138,15 @@ _REG_FUNC_MAP = {
     UART_REGS["RDATA"]: [c_emu.read_rdata, c_emu.read_rdata],
 }
 
-def component_handler(instance: int,
-                      uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                      ) -> bool:
+def component_handler(
+    instance: int,
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     """Main component handler for UART"""
     
     # UART 1 and 2 is actually redundant, but we need it for compatibility
@@ -167,35 +168,38 @@ def component_handler(instance: int,
     except KeyError:
         unhandled_register_exit(prints, "UART0", address)
 
-def component0_handler(uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                      ) -> bool:
+def component0_handler(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     """Instance handler for UART0"""
 
     return component_handler(0, uc, access, address, size, value, user_data)
 
-def component1_handler(uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                      ) -> bool:
+def component1_handler(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     """Instance handler for UART1"""
 
     return component_handler(1, uc, access, address, size, value, user_data)
 
-def component2_handler(uc: qemu.Uc,
-                      access,
-                      address: int,
-                      size: int,
-                      value: int,
-                      user_data
-                      ) -> bool:
+def component2_handler(
+    uc: qemu.Uc,
+    access,
+    address: int,
+    size: int,
+    value: int,
+    user_data
+) -> bool:
     """Instance handler for UART2"""
 
     return component_handler(2, uc, access, address, size, value, user_data)
