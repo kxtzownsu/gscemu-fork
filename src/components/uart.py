@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
+import typing
 import unicorn as qemu
 import queue
 import threading
@@ -9,12 +10,10 @@ import sys
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from src.emulators.haven.registers import REG_DEFS, UART_REGS
-from lib.helpers import unhandled_register_exit, unhandled_register_io, BIT
+from src.emulators.haven.registers import UART_REGS
+from lib.helpers import unhandled_register_exit, unhandled_register_io
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
-
-_REG_BASE_ADDR = REG_DEFS["UART0"]["base_addr"]
 
 class UartController:
     def __init__(self):
@@ -38,9 +37,9 @@ class UartController:
 
                 # update STATE based on input queue
                 if self.input_queue.empty():
-                    self.state |= BIT(7) # True
+                    self.state |= 128 # BIT(7), True
                 else:
-                    self.state &= ~BIT(7) # False
+                    self.state &= ~128 # BIT(7), False
 
                 target_fn(*args) # Splat the arguments into the target_fn
 
@@ -76,55 +75,57 @@ class UartController:
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, target_fn, addr: int):
-        self.opqueue.put([target_fn, (addr,)])
+    def queue_read_worker_op(self, target_fn, size: int):
+        retqueue = queue.Queue()
+        self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
+        return retqueue.get_nowait()
         
-    def queue_write_worker_op(self, target_fn, val: int):
-        self.opqueue.put([target_fn, (val,)])
+    def queue_write_worker_op(self, target_fn, size: int, value: int):
+        self.opqueue.put([target_fn, (size, value)])
 
-    def read_wdata(self, addr, *args, **kwargs) -> None:
+    def read_wdata(self, size: int, queue: queue.Queue) -> None:
         unhandled_register_io(prints, "READ", "UART0", "WDATA")
-        ucmutex().int32_mem_write(addr, 0)
+        queue.put(0)
 
-    def write_wdata(self, val: int, *args, **kwargs) -> None:
-        if not (self.state & BIT(0)):
+    def write_wdata(self, size: int, value: int) -> None:
+        if not (self.state & 1): # BIT(0)
             try:
-                sys.stdout.write(chr(val))
+                sys.stdout.write(chr(value))
                 sys.stdout.flush()
             except:
                 pass
         else:
             prints.warning("WDATA written to whilst STATE TX busy set!")
 
-    def read_nco(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.nco)
+    def read_nco(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.nco)
 
-    def write_nco(self, val: int, *args, **kwargs) -> None:
-        self.nco = val
+    def write_nco(self, size: int, value: int) -> None:
+        self.nco = value
 
-    def read_ctrl(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.ctrl)
+    def read_ctrl(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.ctrl)
 
-    def write_ctrl(self, val: int, *args, **kwargs) -> None:
-        self.ctrl = val
+    def write_ctrl(self, size: int, value: int) -> None:
+        self.ctrl = value
 
-    def read_state(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.state)
+    def read_state(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.state)
 
-    def write_state(self, val: int, *args, **kwargs) -> None:
-        self.state = val
+    def write_state(self, size: int, value: int) -> None:
+        self.state = value
 
-    def read_rdata(self, addr: int, *args, **kwargs) -> None:
+    def read_rdata(self, size: int, queue: queue.Queue) -> None:
         try:
             char = self.input_queue.get_nowait()
         except queue.Empty:
             prints.warning("RDATA read when no available chars!")
             char = 0
 
-        ucmutex().int32_mem_write(addr, char)
+        queue.put(char)
 
-    def write_rdata(self, val: int, *args, **kwargs) -> None:
+    def write_rdata(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "UART0", "RDATA")
 
 c_emu = UartController()
@@ -135,71 +136,28 @@ _REG_FUNC_MAP = {
     UART_REGS["NCO"]: [c_emu.read_nco, c_emu.write_nco],
     UART_REGS["CTRL"]: [c_emu.read_ctrl, c_emu.write_ctrl],
     UART_REGS["STATE"]: [c_emu.read_state, c_emu.write_state],
-    UART_REGS["RDATA"]: [c_emu.read_rdata, c_emu.read_rdata],
+    UART_REGS["RDATA"]: [c_emu.read_rdata, c_emu.write_rdata],
 }
 
-def component_handler(
-    instance: int,
+def component_read_handler(
     uc: qemu.Uc,
-    access,
-    address: int,
+    offset: int,
     size: int,
-    value: int,
-    user_data
-) -> bool:
-    """Main component handler for UART"""
-    
-    # UART 1 and 2 is actually redundant, but we need it for compatibility
-    # with guest code that expects these peripherals to exist. It is pointless
-    # to support UART 1 and 2, it's not connected to anything.
-    if instance in [1, 2]:
-        prints.warning("We do not manage UART1-2, it is AP/EC related.")
-
-    # If we do intend to support UART1 and 2, this code needs to be refactored
-    # for such a purpose. The code only supports UART0 reads/writes for now.
-    reg_offset = address - _REG_BASE_ADDR
-
+    user_data: typing.Any,
+) -> int:
     try:
-        if access == qemu.UC_MEM_READ:
-            c_emu.queue_read_worker_op(_REG_FUNC_MAP[reg_offset][0], address)
-        elif access == qemu.UC_MEM_WRITE:
-            c_emu.queue_write_worker_op(_REG_FUNC_MAP[reg_offset][1], value)
-
+        return c_emu.queue_read_worker_op(_REG_FUNC_MAP[offset][0], size)
     except KeyError:
-        unhandled_register_exit(prints, "UART0", address)
+        unhandled_register_exit(prints, "UART0", offset)
 
-def component0_handler(
+def component_write_handler(
     uc: qemu.Uc,
-    access,
-    address: int,
+    offset: int,
     size: int,
     value: int,
-    user_data
-) -> bool:
-    """Instance handler for UART0"""
-
-    return component_handler(0, uc, access, address, size, value, user_data)
-
-def component1_handler(
-    uc: qemu.Uc,
-    access,
-    address: int,
-    size: int,
-    value: int,
-    user_data
-) -> bool:
-    """Instance handler for UART1"""
-
-    return component_handler(1, uc, access, address, size, value, user_data)
-
-def component2_handler(
-    uc: qemu.Uc,
-    access,
-    address: int,
-    size: int,
-    value: int,
-    user_data
-) -> bool:
-    """Instance handler for UART2"""
-
-    return component_handler(2, uc, access, address, size, value, user_data)
+    user_data: typing.Any,
+) -> None:
+    try:
+        c_emu.queue_write_worker_op(_REG_FUNC_MAP[offset][1], size, value)
+    except KeyError:
+        unhandled_register_exit(prints, "UART0", offset)

@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2025 HavenOverflow/appleflyer
+
+"""File to contain all MMIO component names to their respective r/w handlers
+
+{regname}: [{read_handler_fn}, {write_handler_fn}]
+"""
+
+# Manual import of the component handlers. Refactor in the future?
+import src.components.m3 as m3
+import src.components.uart as uart0
+import src.components.fuse as fuse0
+import src.components.flash as flash0
+import src.components.globalsec as globalsec0
+import src.components.keymgr as keymgr0
+
+MMIO_HANDLERS = {
+    "GLOBALSEC": [globalsec0.component_read_handler, globalsec0.component_write_handler],
+    "FUSE0": [fuse0.component_read_handler, fuse0.component_write_handler],
+    "KEYMGR0": [keymgr0.component_read_handler, keymgr0.component_write_handler],
+    "UART0": [uart0.component_read_handler, uart0.component_write_handler],
+    "FLASH0": [flash0.component_read_handler, flash0.component_write_handler],
+    "M3": [m3.component_read_handler, m3.component_write_handler],
+}

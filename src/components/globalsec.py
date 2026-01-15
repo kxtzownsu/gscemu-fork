@@ -3,12 +3,17 @@
 
 import unicorn as qemu
 
+import typing
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
-from src.emulators.haven.registers import REG_DEFS, GLOBALSEC_REGS
-from lib.helpers import unhandled_register_io, unhandled_register_exit
+from src.emulators.haven.registers import GLOBALSEC_REGS
+from lib.helpers import (
+    unhandled_register_io, 
+    unhandled_register_exit,
+    idx_regs_to_regmap
+)
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -20,7 +25,6 @@ _EXPECTED_SB_BL_SIG = [
     0xe303ec7a, 0x68a03a27, 0xdd18053e, 0x39f8dbbd, 
     0x9b553578, 0xb4598244, 0xc59f62d1, 0x61b8509e
 ]
-_REG_BASE_ADDR = REG_DEFS["GLOBALSEC"]["base_addr"]
 
 class HavenGlobalsec:
     def __init__(self):
@@ -112,125 +116,139 @@ class HavenGlobalsec:
             } for _ in range(3)
         ]
 
-    def read_alert_cfg_lock(self, addr: int) -> None:
+    def read_alert_cfg_lock(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.alert_cfg_lock)
+            return self.alert_cfg_lock
 
-    def write_alert_cfg_lock(self, val: int) -> None:
+    def write_alert_cfg_lock(self, size: int, value: int) -> None:
         with self.mutex:
-            self.alert_cfg_lock = val
+            self.alert_cfg_lock = value
 
-    def read_alert_fw_trigger(self, addr: int) -> None:
+    def read_alert_fw_trigger(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.alert_fw_trigger)
+            return self.alert_fw_trigger
 
-    def write_alert_fw_trigger(self, val: int) -> None:
+    def write_alert_fw_trigger(self, size: int, value: int) -> None:
         with self.mutex:
-            self.alert_fw_trigger = val
+            self.alert_fw_trigger = value
 
-    def read_alert_control(self, addr: int) -> None:
+    def read_alert_control(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.alert_control)
+            return self.alert_control
 
-    def write_alert_control(self, val: int) -> None:
+    def write_alert_control(self, size: int, value: int) -> None:
         with self.mutex:
-            self.alert_control = val
+            self.alert_control = value
 
-    def read_alert_intr_sts(self, addr: int, index: int) -> None:
+    def read_alert_intr_sts(self, size: int, index: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.alert_intr_sts[index])
+            return self.alert_intr_sts[index]
 
-    def write_alert_intr_sts(self, val: int, index: int) -> None:
+    def write_alert_intr_sts(
+            self, size: int, value: int, index: int
+        ) -> None:
         with self.mutex:
-            self.alert_intr_sts[index] = val
+            self.alert_intr_sts[index] = value
 
-    def read_alert_nmi_en(self, addr: int, index: int) -> None:
+    def read_alert_nmi_en(self, size: int, index: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.alert_nmi_en[index])
+            return self.alert_nmi_en[index]
 
-    def write_alert_nmi_en(self, val: int, index: int) -> None:
+    def write_alert_nmi_en(
+            self, size: int, value: int, index: int
+        ) -> None:
         with self.mutex:
-            self.alert_nmi_en[index] = val
+            self.alert_nmi_en[index] = value
 
-    def read_alert_dlyctr_base(self, addr: int, index: int) -> None:
+    def read_alert_dlyctr_base(self, size: int, index: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(
-                addr, self.alert_dlyctr[index]["BASE"]
-            )
+            return self.alert_dlyctr[index]["BASE"]
 
-    def write_alert_dlyctr_base(self, val: int, index: int) -> None:
+    def write_alert_dlyctr_base(
+            self, size: int, value: int, index: int
+        ) -> None:
         with self.mutex:
-            self.alert_dlyctr[index]["BASE"] = val
+            self.alert_dlyctr[index]["BASE"] = value
 
-    def read_alert_dlyctr_len(self, addr: int, index: int) -> None:
+    def read_alert_dlyctr_len(
+            self, size: int, index: int
+        ) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(
-                addr, self.alert_dlyctr[index]["LEN"]
-            )
+            return self.alert_dlyctr[index]["LEN"]
 
-    def write_alert_dlyctr_len(self, val: int, index: int) -> None:
+    def write_alert_dlyctr_len(
+            self, size: int, value: int, index: int
+        ) -> None:
         with self.mutex:
-            self.alert_dlyctr[index]["LEN"] = val
+            self.alert_dlyctr[index]["LEN"] = value
 
-    def read_alert_dlyctr_en(self, addr: int, index: int, en_index: int) -> None:
+    def read_alert_dlyctr_en(self, size: int, index: int, en_index: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(
-                addr, self.alert_dlyctr[index]["EN"][en_index]
-            )
+            return self.alert_dlyctr[index]["EN"][en_index]
 
-    def write_alert_dlyctr_en(self, val: int, index: int, en_index: int) -> None:
+    def write_alert_dlyctr_en(
+            self, size: int, value: int, index: int, en_index: int
+        ) -> None:
         with self.mutex:
-            self.alert_dlyctr[index]["EN"][en_index] = val
+            self.alert_dlyctr[index]["EN"][en_index] = value
 
-    def read_alert_dlyctr_shutdown_en(self, addr: int, index: int) -> None:
+    def read_alert_dlyctr_shutdown_en(
+            self, size: int, index: int
+        ) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(
-                addr, self.alert_dlyctr[index]["SHUTDOWN_EN"]
-            )
+            return self.alert_dlyctr[index]["SHUTDOWN_EN"]
 
-    def write_alert_dlyctr_shutdown_en(self, val: int, index: int) -> None:
+    def write_alert_dlyctr_shutdown_en(
+            self, size: int, value: int, index: int
+        ) -> None:
         with self.mutex:
-            self.alert_dlyctr[index]["SHUTDOWN_EN"] = val
+            self.alert_dlyctr[index]["SHUTDOWN_EN"] = value
 
-    def read_alert_dlyctr_clear(self, addr: int, index: int) -> None:
+    def read_alert_dlyctr_clear(self, size: int, index: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(
-                addr, self.alert_dlyctr[index]["CLEAR"]
-            )
+            return self.alert_dlyctr[index]["CLEAR"]
 
-    def write_alert_dlyctr_clear(self, val: int, index: int) -> None:
+    def write_alert_dlyctr_clear(
+            self, size: int, value: int, index: int
+        ) -> None:
         with self.mutex:
-            self.alert_dlyctr[index]["CLEAR"] = val
+            self.alert_dlyctr[index]["CLEAR"] = value
 
-    def read_alert_group_en(self, addr: int, index: int, en_index: int) -> None:
+    def read_alert_group_en(
+            self, size: int, index: int, en_index: int
+        ) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(
-                addr, self.alert_group[index]["EN"][en_index]
-            )
+            return self.alert_group[index]["EN"][en_index]
 
-    def write_alert_group_en(self, val: int, index: int, en_index: int) -> None:
+    def write_alert_group_en(
+            self, size: int, value: int, index: int, en_index: int
+        ) -> None:
         with self.mutex:
-            self.alert_group[index]["EN"][en_index] = val
+            self.alert_group[index]["EN"][en_index] = value
 
-    def read_alert_group_ctr(self, addr: int, index: int) -> None:
+    def read_alert_group_ctr(
+            self, size: int, index: int
+        ) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(
-                addr, self.alert_group[index]["CTR"]
-            )
+            return self.alert_group[index]["CTR"]
 
-    def write_alert_group_ctr(self, val: int, index: int) -> None:
+    def write_alert_group_ctr(
+            self, size: int, value: int, index: int
+        ) -> None:
         with self.mutex:
-            self.alert_group[index]["CTR"] = val
+            self.alert_group[index]["CTR"] = value
 
-    def read_alert_group_threshold(self, addr: int, index: int) -> None:
+    def read_alert_group_threshold(
+            self, size: int, index: int
+        ) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(
-                addr, self.alert_group[index]["THRESHOLD"]
-            )
+            return self.alert_group[index]["THRESHOLD"]
 
-    def write_alert_group_threshold(self, val: int, index: int) -> None:
+    def write_alert_group_threshold(
+            self, size: int, value: int, index: int
+        ) -> None:
         with self.mutex:
-            self.alert_group[index]["THRESHOLD"] = val
+            self.alert_group[index]["THRESHOLD"] = value
 
     def decrement_permission_runlevel(self, reg_offset: int) -> None:
         curr_runlevel = self.permission_runlevel[reg_offset]
@@ -249,57 +267,57 @@ class HavenGlobalsec:
 
         self.permission_runlevel[reg_offset] = curr_runlevel
 
-    def read_permission_runlevel(self, reg_offset: int, addr: int) -> None:
+    def read_permission_runlevel(self, size: int, reg_offset: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(
-                addr, self.permission_runlevel[reg_offset]
-            )
+            return self.permission_runlevel[reg_offset]
 
-    def write_permission_runlevel(self, reg_offset: int, val: int) -> None:
+    def write_permission_runlevel(
+            self, size: int, value: int, reg_offset: int
+        ) -> None:
         with self.mutex:
             self.decrement_permission_runlevel(reg_offset)
         
-    def read_dummykey(self, addr: int, idx: int) -> None:
+    def read_dummykey(self, size: int, idx: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.dummykey[idx])
+            return self.dummykey[idx]
 
-    def write_dummykey(self, val: int, idx: int) -> None:
+    def write_dummykey(self, size: int, value: int, idx: int) -> None:
         with self.mutex:
-            self.dummykey[idx] = val
+            self.dummykey[idx] = value
 
-    def read_dbg_control(self, addr: int) -> None:
+    def read_dbg_control(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.dbg_control)
+            return self.dbg_control
 
-    def write_dbg_control(self, val: int) -> None:
+    def write_dbg_control(self, size: int, value: int) -> None:
         with self.mutex:
-            self.dbg_control = val
+            self.dbg_control = value
 
-    def read_sb_comp_status(self, addr: int) -> None:
+    def read_sb_comp_status(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, int(self.sb_comp_status))
+            return int(self.sb_comp_status)
 
-    def write_sb_comp_status(self, val: int) -> None:
+    def write_sb_comp_status(self, size: int, value: int) -> None:
         with self.mutex:
             unhandled_register_io(
                 prints, "WRITE", "GLOBALSEC", "SB_COMP_STATUS"
             )
 
-    def read_sb_bl_sig(self, addr: int) -> None:
+    def read_sb_bl_sig(self, size: int) -> None:
         # We know that on a Cr50, reading from SB_BL_SIG returns a 0xfacecafe
         with self.mutex:
-            ucmutex().int32_mem_write(addr, 0xfacecafe)
+            return 0xfacecafe
 
-    def write_sb_bl_sig(self, val: int, index: int) -> None:
+    def write_sb_bl_sig(self, size: int, value: int, index: int) -> None:
         with self.mutex:
-            self.sb_bl_sig[index] = val
+            self.sb_bl_sig[index] = value
 
-    def read_sig_unlock(self, addr: int) -> None:
+    def read_sig_unlock(self, size: int) -> None:
         with self.mutex:
             unhandled_register_io(prints, "READ", "GLOBALSEC", "SIG_UNLOCK")
-            ucmutex().int32_mem_write(addr, 0)
+            return 0
 
-    def write_sig_unlock(self, val: int) -> None:
+    def write_sig_unlock(self, size: int, value: int) -> None:
         with self.mutex:
             # System has requested for execution unlock. Verify SB_BL_SIG.
 
@@ -308,32 +326,33 @@ class HavenGlobalsec:
             else:
                 self.sb_comp_status = False
 
-    def read_dbg_control(self, addr: int) -> None:
+    def read_dbg_control(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.dbg_control)
+            return self.dbg_control
 
-    def write_dbg_control(self, val: int) -> None:
+    def write_dbg_control(self, size: int, value: int) -> None:
         with self.mutex:
-            self.dbg_control = val
+            self.dbg_control = value
 
-    def read_hide_rom(self, addr: int) -> None:
+    def read_hide_rom(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.hide_rom)
+            return self.hide_rom
 
-    def write_hide_rom(self, val: int) -> None:
+    def write_hide_rom(self, size: int, value: int) -> None:
         with self.mutex:
             # We know that the Cr50 does not allow HIDE_ROM to change
             # after it has a value.
             if self.hide_rom:
                 return
-            self.hide_rom = val
+            self.hide_rom = value
 
-    def read_region_register(self, 
-                             addr: int, 
-                             reg_type: str, 
-                             bus_master: str, 
-                             index: int
-                             ) -> None:
+    def read_region_register(
+        self,
+        size: int, 
+        reg_type: str, 
+        bus_master: str, 
+        index: int
+    ) -> None:
         with self.mutex:
             if reg_type == "ctrl":
                 value = self.region_ctrl[bus_master][index]
@@ -343,23 +362,25 @@ class HavenGlobalsec:
                 value = self.region_base_addr[bus_master][index]
             elif reg_type == "size":
                 value = self.region_size[bus_master][index]
-            ucmutex().int32_mem_write(addr, value)
+            return value
 
-    def write_region_register(self, 
-                              val: int, 
-                              reg_type: str, 
-                              bus_master: str, 
-                              index: int
-                              ) -> None:
+    def write_region_register(
+        self,
+        size: int,
+        value: int, 
+        reg_type: str, 
+        bus_master: str, 
+        index: int
+    ) -> None:
         with self.mutex:
             if reg_type == "ctrl":
-                self.region_ctrl[bus_master][index] = val
+                self.region_ctrl[bus_master][index] = value
             elif reg_type == "ctrl_cfg_en":
-                self.region_ctrl_cfg_en[bus_master][index] = val
+                self.region_ctrl_cfg_en[bus_master][index] = value
             elif reg_type == "base_addr":
-                self.region_base_addr[bus_master][index] = val
+                self.region_base_addr[bus_master][index] = value
             elif reg_type == "size":
-                self.region_size[bus_master][index] = val
+                self.region_size[bus_master][index] = value
 
 c_emu = HavenGlobalsec()
 
@@ -376,31 +397,6 @@ _REG_FUNC_MAP = {
     GLOBALSEC_REGS["ALERT"]["CONTROL"]: [
         c_emu.read_alert_control, c_emu.write_alert_control
     ],
-    GLOBALSEC_REGS["CPU0_S_PERMISSION"]: [
-        lambda addr, reg_offset=GLOBALSEC_REGS["CPU0_S_PERMISSION"]: 
-        c_emu.read_permission_runlevel(reg_offset, addr),
-        lambda val, reg_offset=GLOBALSEC_REGS["CPU0_S_PERMISSION"]: 
-        c_emu.write_permission_runlevel(reg_offset, val),
-    ],
-    GLOBALSEC_REGS["CPU0_S_DAP_PERMISSION"]: [
-        lambda addr, reg_offset=GLOBALSEC_REGS["CPU0_S_DAP_PERMISSION"]: 
-        c_emu.read_permission_runlevel(reg_offset, addr),
-        lambda val, reg_offset=GLOBALSEC_REGS["CPU0_S_DAP_PERMISSION"]: 
-        c_emu.write_permission_runlevel(reg_offset, val),
-    ],
-    GLOBALSEC_REGS["DDMA0_PERMISSION"]: [
-        lambda addr, reg_offset=GLOBALSEC_REGS["DDMA0_PERMISSION"]: 
-        c_emu.read_permission_runlevel(reg_offset, addr),
-        lambda val, reg_offset=GLOBALSEC_REGS["DDMA0_PERMISSION"]: 
-        c_emu.write_permission_runlevel(reg_offset, val),
-    ],
-    GLOBALSEC_REGS["SOFTWARE_LVL"]: [
-        lambda addr, reg_offset=GLOBALSEC_REGS["SOFTWARE_LVL"]: 
-        c_emu.read_permission_runlevel(reg_offset, addr),
-        lambda val, reg_offset=GLOBALSEC_REGS["SOFTWARE_LVL"]: 
-        c_emu.write_permission_runlevel(reg_offset, val),
-    ],
-
     GLOBALSEC_REGS["HIDE_ROM"]: [
         c_emu.read_hide_rom, c_emu.write_hide_rom
     ],
@@ -421,103 +417,127 @@ for reg_type in ["CTRL", "CTRL_CFG_EN", "BASE_ADDR", "SIZE"]:
     for bus_master, offsets in GLOBALSEC_REGS["REGION"][reg_type].items():
         for idx, offset in enumerate(offsets):
             _REG_FUNC_MAP[offset] = [
-                lambda addr, 
+                lambda size, 
                 rt=reg_type_lower, 
                 bm=bus_master, 
-                i=idx: c_emu.read_region_register(addr, rt, bm, i),
-                lambda val, 
+                i=idx: c_emu.read_region_register(size, rt, bm, i),
+                lambda size, 
+                value, 
                 rt=reg_type_lower, 
                 bm=bus_master, 
-                i=idx: c_emu.write_region_register(val, rt, bm, i)
+                i=idx: c_emu.write_region_register(size, value, rt, bm, i)
             ]
 
-for idx, offset in enumerate(GLOBALSEC_REGS["ALERT"]["INTR_STS"]):
-    _REG_FUNC_MAP[offset] = [
-        lambda addr, i=idx: c_emu.read_alert_intr_sts(addr, i),
-        lambda val, i=idx: c_emu.write_alert_intr_sts(val, i)
-    ]
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, GLOBALSEC_REGS["ALERT"]["INTR_STS"],
+    c_emu.read_alert_intr_sts, c_emu.write_alert_intr_sts
+)
 
-for idx, offset in enumerate(GLOBALSEC_REGS["ALERT"]["NMI_EN"]):
-    _REG_FUNC_MAP[offset] = [
-        lambda addr, i=idx: c_emu.read_alert_nmi_en(addr, i),
-        lambda val, i=idx: c_emu.write_alert_nmi_en(val, i)
-    ]
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, GLOBALSEC_REGS["ALERT"]["NMI_EN"],
+    c_emu.read_alert_nmi_en, c_emu.write_alert_nmi_en
+)
 
 for idx, dlyctr in enumerate(GLOBALSEC_REGS["ALERT"]["DLYCTR"]):
     _REG_FUNC_MAP[dlyctr["BASE"]] = [
-        lambda addr, i=idx: c_emu.read_alert_dlyctr_base(addr, i),
-        lambda val, i=idx: c_emu.write_alert_dlyctr_base(val, i)
+        lambda size, 
+        i=idx: c_emu.read_alert_dlyctr_base(size, i),
+        lambda size, 
+        value, 
+        i=idx: c_emu.write_alert_dlyctr_base(size, value, i)
     ]
     _REG_FUNC_MAP[dlyctr["LEN"]] = [
-        lambda addr, i=idx: c_emu.read_alert_dlyctr_len(addr, i),
-        lambda val, i=idx: c_emu.write_alert_dlyctr_len(val, i)
+        lambda size, 
+        i=idx: c_emu.read_alert_dlyctr_len(size, i),
+        lambda size, 
+        value, i=idx: c_emu.write_alert_dlyctr_len(size, value, i)
     ]
     for en_idx, en_offset in enumerate(dlyctr["EN"]):
         _REG_FUNC_MAP[en_offset] = [
-            lambda addr, 
+            lambda size, 
             i=idx, 
-            ei=en_idx: c_emu.read_alert_dlyctr_en(addr, i, ei),
-            lambda val, 
+            ei=en_idx: c_emu.read_alert_dlyctr_en(size, i, ei),
+            lambda 
+            size,
+            value, 
             i=idx, 
-            ei=en_idx: c_emu.write_alert_dlyctr_en(val, i, ei)
+            ei=en_idx: c_emu.write_alert_dlyctr_en(size, value, i, ei)
         ]
     _REG_FUNC_MAP[dlyctr["SHUTDOWN_EN"]] = [
-        lambda addr, i=idx: c_emu.read_alert_dlyctr_shutdown_en(addr, i),
-        lambda val, i=idx: c_emu.write_alert_dlyctr_shutdown_en(val, i)
+        lambda size, 
+        i=idx: c_emu.read_alert_dlyctr_shutdown_en(size, i),
+        lambda size, 
+        value, 
+        i=idx: c_emu.write_alert_dlyctr_shutdown_en(size, value, i)
     ]
     _REG_FUNC_MAP[dlyctr["CLEAR"]] = [
-        lambda addr, i=idx: c_emu.read_alert_dlyctr_clear(addr, i),
-        lambda val, i=idx: c_emu.write_alert_dlyctr_clear(val, i)
+        lambda size, 
+        i=idx: c_emu.read_alert_dlyctr_clear(size, i),
+        lambda size, 
+        value, 
+        i=idx: c_emu.write_alert_dlyctr_clear(size, value, i)
     ]
 
 for idx, group in enumerate(GLOBALSEC_REGS["ALERT"]["GROUP"]):
     for en_idx, en_offset in enumerate(group["EN"]):
         _REG_FUNC_MAP[en_offset] = [
-            lambda addr, 
+            lambda size, 
             i=idx, 
-            ei=en_idx: c_emu.read_alert_group_en(addr, i, ei),
-            lambda val, 
+            ei=en_idx: c_emu.read_alert_group_en(size, i, ei),
+            lambda size,
+            val, 
             i=idx, 
-            ei=en_idx: c_emu.write_alert_group_en(val, i, ei)
+            ei=en_idx: c_emu.write_alert_group_en(size, val, i, ei)
         ]
     _REG_FUNC_MAP[group["CTR"]] = [
-        lambda addr, i=idx: c_emu.read_alert_group_ctr(addr, i),
-        lambda val, i=idx: c_emu.write_alert_group_ctr(val, i)
+        lambda size, i=idx: c_emu.read_alert_group_ctr(size, i),
+        lambda size, val, i=idx: c_emu.write_alert_group_ctr(size, val, i)
     ]
     _REG_FUNC_MAP[group["THRESHOLD"]] = [
-        lambda addr, i=idx: c_emu.read_alert_group_threshold(addr, i),
-        lambda val, i=idx: c_emu.write_alert_group_threshold(val, i)
+        lambda size, i=idx: c_emu.read_alert_group_threshold(size, i),
+        lambda size, val, i=idx: c_emu.write_alert_group_threshold(size, val, i)
     ]
 
-for idx, offset in enumerate(GLOBALSEC_REGS["DUMMYKEY"]):
-    _REG_FUNC_MAP[offset] = [
-        lambda addr, i=idx: c_emu.read_dummykey(addr, i),
-        lambda val, i=idx: c_emu.write_dummykey(val, i)
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, GLOBALSEC_REGS["DUMMYKEY"],
+    c_emu.read_dummykey, c_emu.write_dummykey
+)
+
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, GLOBALSEC_REGS["SB_BL_SIG"],
+    c_emu.read_sb_bl_sig, c_emu.write_sb_bl_sig
+)
+
+for perm in [
+    "CPU0_S_PERMISSION", "CPU0_S_DAP_PERMISSION", 
+    "DDMA0_PERMISSION", "SOFTWARE_LVL"
+]:
+    _REG_FUNC_MAP[GLOBALSEC_REGS[perm]] = [
+        lambda size, reg_offset=GLOBALSEC_REGS[perm]: 
+        c_emu.read_permission_runlevel(size, reg_offset),
+        lambda size, value, reg_offset=GLOBALSEC_REGS[perm]: 
+        c_emu.write_permission_runlevel(size, value, reg_offset)
     ]
 
-for idx, offset in enumerate(GLOBALSEC_REGS["SB_BL_SIG"]):
-    _REG_FUNC_MAP[offset] = [
-        lambda addr, i=idx: c_emu.read_sb_bl_sig(addr, i),
-        lambda val, i=idx: c_emu.write_sb_bl_sig(val, i)
-    ]
-
-def component_handler(
+def component_read_handler(
     uc: qemu.Uc,
-    access,
-    address: int,
+    offset: int,
+    size: int,
+    user_data: typing.Any,
+) -> int:
+    try:
+        return _REG_FUNC_MAP[offset][0](size)
+    except KeyError:
+        unhandled_register_exit(prints, "GLOBALSEC", offset)
+
+def component_write_handler(
+    uc: qemu.Uc,
+    offset: int,
     size: int,
     value: int,
-    user_data
-) -> bool:
-    """Main component handler for GLOBALSEC"""
-
-    reg_offset = address - _REG_BASE_ADDR
-
+    user_data: typing.Any,
+) -> None:
     try:
-        if access == qemu.UC_MEM_READ:
-            _REG_FUNC_MAP[reg_offset][0](address)
-        elif access == qemu.UC_MEM_WRITE:
-            _REG_FUNC_MAP[reg_offset][1](value)
-
+        _REG_FUNC_MAP[offset][1](size, value)
     except KeyError:
-        unhandled_register_exit(prints, "GLOBALSEC", address)
+        unhandled_register_exit(prints, "GLOBALSEC", offset)

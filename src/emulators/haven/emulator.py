@@ -22,7 +22,7 @@ import unicorn as qemu
 from lib.globalvars import *
 from .init_utils import *
 from . import hooks
-from .registers import REG_DEFS
+from .registers import REG_DEFS, MMIO_REG_DEFS
 from lib.logger import GscemuLogger
 from lib.threadutils import UcMutex
 
@@ -64,7 +64,7 @@ class Emulator:
         
         # TODO(appleflyer): increase the debugability of the init process.
 
-        if not map_memory(REG_DEFS):
+        if not map_memory(REG_DEFS, MMIO_REG_DEFS):
             prints.fatal("Failed to map memory during init process!")
             return
         
@@ -81,11 +81,6 @@ class Emulator:
         # We need to also capture invalid memory accesses. We should integrate
         # this with the M3 in the future. MemManage intr?
         g_uc().hook_add(UNICORN_MEM_INVALID_HOOKS, hooks.mem_invalid_access)
-
-        # Important hook for us to pass writes/reads into Cr50 component
-        # handlers. Not really another way to make this more efficient, it's
-        # already quite efficient as it is.
-        g_uc().hook_add(UNICORN_MEM_IO_HOOKS, hooks.mem_io_operation)
         
         # Call this after the emulator has finished initializing.
         self.initialized = True

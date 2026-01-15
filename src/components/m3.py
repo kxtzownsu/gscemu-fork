@@ -7,22 +7,20 @@ Since this is the CPU, it is tightly integrated with the Uc engine. Therefore,
 this will not be threaded/queued. Instead, we will have one mutex.
 """
 
+import typing
 import time
 import unicorn as qemu
-import queue
-import threading
 
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
-from src.emulators.haven.registers import REG_DEFS, M3_REGS
+from src.emulators.haven.registers import M3_REGS
 from lib.helpers import unhandled_register_io, unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 _CYCCNT_SPEED = (1/24000000) * 1000000000
-_REG_BASE_ADDR = REG_DEFS["M3"]["base_addr"]
 
 class ArmSC300:
     def __init__(self):
@@ -36,57 +34,58 @@ class ArmSC300:
         self.vtor = 0
 
     def start_cyccnt_time(self) -> None:
-        self.cyccnt_time_start = time.perf_counter_ns()
-
-    def read_demcr(self, addr: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.demcr)
+            self.cyccnt_time_start = time.perf_counter_ns()
 
-    def write_demcr(self, val: int) -> None:
+    def read_demcr(self, size: int) -> None:
         with self.mutex:
-            self.demcr = val
+            return self.demcr
 
-    def read_dwt_ctrl(self, addr: int) -> None:
+    def write_demcr(self, size: int, value: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.dwt_ctrl)
+            self.demcr = value
 
-    def write_dwt_ctrl(self, val: int) -> None:
+    def read_dwt_ctrl(self, size: int) -> None:
         with self.mutex:
-            self.dwt_ctrl = val
+            return self.dwt_ctrl
 
-    def read_cpuid(self, addr: int) -> None:
+    def write_dwt_ctrl(self, size: int, value: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.cpuid)
+            self.dwt_ctrl = value
 
-    def write_cpuid(self, val: int) -> None:
+    def read_cpuid(self, size: int) -> None:
+        with self.mutex:
+            return self.cpuid
+
+    def write_cpuid(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "M3", "CPUID")
 
-    def read_vtor(self, addr: int) -> None:
+    def read_vtor(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.vtor)
+            return self.vtor
 
-    def write_vtor(self, val: int) -> None:
+    def write_vtor(self, size: int, value: int) -> None:
         with self.mutex:
-            self.vtor = val
+            self.vtor = value
 
-    def read_itcmcr(self, addr: int) -> None:
+    def read_itcmcr(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.itcmcr)
+            return self.itcmcr
 
-    def write_itcmcr(self, val: int) -> None:
+    def write_itcmcr(self, size: int, value: int) -> None:
         with self.mutex:
             # It is unknown why ITCMCR returns 7. We need to figure it out.
             self.itcmcr = 7
 
-    def read_dwt_cyccnt(self, addr: int) -> None:
+    def read_dwt_cyccnt(self, size: int) -> None:
         with self.mutex:
             val = int(
                 (time.perf_counter_ns() - self.cyccnt_time_start) 
                 // _CYCCNT_SPEED
             )
-            ucmutex().int32_mem_write(addr, val)
+            return val
 
-    def write_dwt_cyccnt(self, val: int) -> None:
+    def write_dwt_cyccnt(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "M3", "DWT_CYCCNT")
 
 c_emu = ArmSC300()
@@ -100,23 +99,25 @@ _REG_FUNC_MAP = {
     M3_REGS["VTOR"]: [c_emu.read_vtor, c_emu.write_vtor],
 }
 
-def component_handler(
+def component_read_handler(
     uc: qemu.Uc,
-    access,
-    address: int,
+    offset: int,
+    size: int,
+    user_data: typing.Any,
+) -> int:
+    try:
+        return _REG_FUNC_MAP[offset][0](size)
+    except KeyError:
+        unhandled_register_exit(prints, "M3", offset)
+
+def component_write_handler(
+    uc: qemu.Uc,
+    offset: int,
     size: int,
     value: int,
-    user_data
-) -> bool:
-    """Main component handler for M3"""
-
-    reg_offset = address - _REG_BASE_ADDR
-
+    user_data: typing.Any,
+) -> None:
     try:
-        if access == qemu.UC_MEM_READ:
-            _REG_FUNC_MAP[reg_offset][0](address)
-        elif access == qemu.UC_MEM_WRITE:
-            _REG_FUNC_MAP[reg_offset][1](value)
-
+        _REG_FUNC_MAP[offset][1](size, value)
     except KeyError:
-        unhandled_register_exit(prints, "M3", address)
+        unhandled_register_exit(prints, "M3", offset)

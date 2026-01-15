@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
+import typing
 import unicorn as qemu
 import queue
 import threading
@@ -13,11 +14,14 @@ from env import *
 from lib.threadutils import FifoLock
 from lib.logger import GscemuLogger
 from src.emulators.haven.registers import REG_DEFS, KEYMGR_REGS
-from lib.helpers import unhandled_register_exit, unhandled_register_io, BIT
+from lib.helpers import (
+    unhandled_register_io, 
+    unhandled_register_exit,
+    idx_regs_to_regmap,
+    idx_retqueue_regs_to_regmap
+)
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
-
-_REG_BASE_ADDR = REG_DEFS["KEYMGR0"]["base_addr"]
 
 class ShaEngine:
     def __init__(self):
@@ -183,98 +187,100 @@ class ShaEngine:
         self.start_hash = False
         self.input_fifo = bytearray()
 
-    def queue_read_worker_op(self, target_fn, addr: int):
-        self.opqueue.put([target_fn, (addr,)])
+    def queue_read_worker_op(self, target_fn, size: int):
+        retqueue = queue.Queue()
+        self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
+        return retqueue.get_nowait()
         
-    def queue_write_worker_op(self, target_fn, val: int, size: int):
-        self.opqueue.put([target_fn, (val, size)])
+    def queue_write_worker_op(self, target_fn, size: int, value: int):
+        self.opqueue.put([target_fn, (size, value)])
 
-    def read_cfg_msglen_lo(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.msglen_lo)
+    def read_cfg_msglen_lo(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.msglen_lo)
 
-    def write_cfg_msglen_lo(self, val: int, *args, **kwargs) -> None:
+    def write_cfg_msglen_lo(self, size: int, value: int) -> None:
         if self.recieve_data:
             return
         
-        self.msglen_lo = val
+        self.msglen_lo = value
         self.msglen_full = (self.msglen_hi << 32) | self.msglen_lo
 
-    def read_cfg_msglen_hi(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.msglen_hi)
+    def read_cfg_msglen_hi(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.msglen_hi)
 
-    def write_cfg_msglen_hi(self, val: int, *args, **kwargs) -> None:
+    def write_cfg_msglen_hi(self, size: int, value: int) -> None:
         if self.recieve_data:
             return
         
-        self.msglen_hi = val
+        self.msglen_hi = value
         self.msglen_full = (self.msglen_hi << 32) | self.msglen_lo
 
-    def read_cfg_en(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.en)
+    def read_cfg_en(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.en)
 
-    def write_cfg_en(self, val: int, *args, **kwargs) -> None:
+    def write_cfg_en(self, size: int, value: int) -> None:
         if self.recieve_data:
             return
         
-        self.en = val
+        self.en = value
 
-    def read_cfg_wr_en(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.wr_en)
+    def read_cfg_wr_en(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.wr_en)
 
-    def write_cfg_wr_en(self, val: int, *args, **kwargs) -> None:
-        self.wr_en = val
+    def write_cfg_wr_en(self, size: int, value: int) -> None:
+        self.wr_en = value
 
-    def read_trig(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.trig)
+    def read_trig(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.trig)
 
-    def write_trig(self, val: int, *args, **kwargs) -> None:
-        self.trig = val
+    def write_trig(self, size: int, value: int) -> None:
+        self.trig = value
 
-    def read_itop(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.itop)
+    def read_itop(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.itop)
 
-    def write_itop(self, val: int, *args, **kwargs) -> None:
-        self.itop = val
+    def write_itop(self, size: int, value: int) -> None:
+        self.itop = value
 
-    def read_input_fifo(self, addr, *args, **kwargs) -> None:
+    def read_input_fifo(self, size: int, queue: queue.Queue) -> None:
         unhandled_register_io(prints, "READ", "KEYMGR0", "INPUT_FIFO")
-        ucmutex().int32_mem_write(addr, 0)
+        queue.put(0)
 
-    def write_input_fifo(self, val: int, size: int, *args, **kwargs) -> None:
+    def write_input_fifo(self, size: int, value: int) -> None:
         if not self.recieve_data:
             return
         
         match size:
             case 1:
-                self.input_fifo.append(val & 0xFF)
+                self.input_fifo.append(value & 0xFF)
             case 4:
-                self.input_fifo.extend(struct.pack("<I", val))
+                self.input_fifo.extend(struct.pack("<I", value))
             case _:
                 prints.warning(f"Unexpected write size={size}, ignoring val.")
 
-    def read_sts_h(self, addr: int, index: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.sts_h[index])
+    def read_sts_h(self, size: int, queue: queue.Queue, index: int) -> None:
+        queue.put(self.sts_h[index])
 
-    def write_sts_h(self, val: int, index: int, *args, **kwargs) -> None:
+    def write_sts_h(self, size: int, value: int, index: int) -> None:
         unhandled_register_io(prints, "WRITE", "KEYMGR0", f"STS_H_{index}")
 
-    def read_key_w(self, addr: int, index: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.key_w[index])
+    def read_key_w(self, size: int, queue: queue.Queue, index: int) -> None:
+        queue.put(self.key_w[index])
 
-    def write_key_w(self, val: int, index: int, *args, **kwargs) -> None:
-        self.key_w[index] = val
+    def write_key_w(self, size: int, value: int, index: int) -> None:
+        self.key_w[index] = value
 
-    def read_rand_stall_ctl(self, addr: int, *args, **kwargs) -> None:
+    def read_rand_stall_ctl(self, size: int, queue: queue.Queue) -> None:
         val = (
             self.rand_stall_ctl["STALL_EN"] |
             (self.rand_stall_ctl["FREQ"] << 1)
         )
-        ucmutex().int32_mem_write(addr, val)
+        queue.put(val)
 
-    def write_rand_stall_ctl(self, val: int, *args, **kwargs) -> None:
-        stall_en = (val & 0x1)
-        stall_freq = (val & 0x6) >> 0x1
+    def write_rand_stall_ctl(self, size: int, value: int) -> None:
+        stall_en = (value & 0x1)
+        stall_freq = (value & 0x6) >> 0x1
 
         if stall_en:
             # If STALL_EN, that means random nops enabled. Only accept
@@ -285,29 +291,29 @@ class ShaEngine:
             self.rand_stall_ctl["STALL_EN"] = stall_en
             self.rand_stall_ctl["FREQ"] = stall_freq
 
-    def read_cert_override(self, addr: int, *args, **kwargs) -> None:
+    def read_cert_override(self, size: int, queue: queue.Queue) -> None:
         val = (
             self.cert_override_ptr["DIGEST"] |
             self.cert_override_ptr["KEY"] << 0x10
         )
-        ucmutex().int32_mem_write(addr, val)
+        queue.put(val)
 
-    def write_cert_override(self, val: int, *args, **kwargs) -> None:        
-        self.cert_override_ptr["DIGEST"] = (val & 0x3f)
-        self.cert_override_ptr["KEY"] = (val & 0x3f0000) >> 0x10
+    def write_cert_override(self, size: int, value: int) -> None:    
+        self.cert_override_ptr["DIGEST"] = (value & 0x3f)
+        self.cert_override_ptr["KEY"] = (value & 0x3f0000) >> 0x10
 
-    def read_use_cert(self, addr: int, *args, **kwargs) -> None:
+    def read_use_cert(self, size: int, queue: queue.Queue) -> None:
         val = (
             self.use_cert["INDEX"] |
             self.use_cert["ENABLE"] << 0x6 |
             self.use_cert["CHECK_ONLY"] << 0x7
         )
-        ucmutex().int32_mem_write(addr, val)
+        queue.put(val)
 
-    def write_use_cert(self, val: int, *args, **kwargs) -> None:        
-        self.use_cert["INDEX"] = (val & 0x3f)
-        self.use_cert["ENABLE"] = (val & 0x40) >> 0x6
-        self.use_cert["CHECK_ONLY"] = (val & 0x80) >> 0x7
+    def write_use_cert(self, size: int, value: int) -> None:        
+        self.use_cert["INDEX"] = (value & 0x3f)
+        self.use_cert["ENABLE"] = (value & 0x40) >> 0x6
+        self.use_cert["CHECK_ONLY"] = (value & 0x80) >> 0x7
         
 class KeymgrController:
     def __init__(self):
@@ -327,49 +333,49 @@ class KeymgrController:
 
         self.shaengine.start_worker()
 
-    def read_hkey_rwr(self, addr: int, index: int, *args, **kwargs) -> None:
+    def read_hkey_rwr(self, size: int, index: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.hkey_rwr[index])
+            return self.hkey_rwr[index]
 
     def write_hkey_rwr(
-            self, val: int, size: int, index: int, *args, **kwargs
-        ) -> None:
+        self, size: int, value: int, index: int
+    ) -> None:
         with self.mutex:
-            self.hkey_rwr[index] = val
+            self.hkey_rwr[index] = value
 
-    def read_hkey_err_flags(self, addr: int, *args, **kwargs) -> None:
+    def read_hkey_err_flags(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.hkey_err_flags)
+            return self.hkey_err_flags
 
-    def write_hkey_err_flags(self, val: int, *args, **kwargs) -> None:
+    def write_hkey_err_flags(self, size: int, value: int) -> None:
         with self.mutex:
-            self.hkey_err_flags = val
+            self.hkey_err_flags = value
 
-    def read_rwr_vld(self, addr: int, *args, **kwargs) -> None:
+    def read_rwr_vld(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.rwr_vld)
+            return self.rwr_vld
 
-    def write_rwr_vld(self, val: int, *args, **kwargs) -> None:
+    def write_rwr_vld(self, size: int, value: int) -> None:
         with self.mutex:
-            self.rwr_vld = val
+            self.rwr_vld = value
 
-    def read_rwr_lock(self, addr: int, *args, **kwargs) -> None:
+    def read_rwr_lock(self, size: int) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.rwr_lock)
+            return self.rwr_lock
 
-    def write_rwr_lock(self, val: int, *args, **kwargs) -> None:
+    def write_rwr_lock(self, size: int, value: int) -> None:
         with self.mutex:
-            self.rwr_lock = val
+            self.rwr_lock = value
 
     def read_cert_revoke_ctrl(
-            self, addr: int, index: int, *args, **kwargs
-        ) -> None:
+        self, size: int, index: int
+    ) -> None:
         with self.mutex:
-            ucmutex().int32_mem_write(addr, self.cert_revoke_ctrl[index])
+            return self.cert_revoke_ctrl[index]
 
     def write_cert_revoke_ctrl(
-            self, val: int, size: int, index: int, *args, **kwargs
-        ) -> None:
+        self, size: int, value: int, index: int
+    ) -> None:
         # with self.mutex:
 
         # We should be able to write to this register, but we do not implement
@@ -436,58 +442,56 @@ _SHAENGINE_FUNC_MAP = {
     ],
 }
 
-for idx, offset in enumerate(KEYMGR_REGS["HKEY_RWR"]):
-    _REG_FUNC_MAP[offset] = [
-        lambda addr, i=idx: c_emu.read_hkey_rwr(addr, i),
-        lambda val, size, i=idx: c_emu.write_hkey_rwr(val, size, i)
-    ]
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, KEYMGR_REGS["HKEY_RWR"],
+    c_emu.read_hkey_rwr, c_emu.write_hkey_rwr
+)
 
-for idx, offset in enumerate(KEYMGR_REGS["CERT_REVOKE_CTRL"]):
-    _REG_FUNC_MAP[offset] = [
-        lambda addr, i=idx: c_emu.read_cert_revoke_ctrl(addr, i),
-        lambda val, size, i=idx: c_emu.write_cert_revoke_ctrl(val, size, i)
-    ]
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, KEYMGR_REGS["CERT_REVOKE_CTRL"],
+    c_emu.read_cert_revoke_ctrl, c_emu.write_cert_revoke_ctrl
+)
 
-for idx, offset in enumerate(KEYMGR_REGS["SHA"]["STS_H"]):
-    _SHAENGINE_FUNC_MAP[offset] = [
-        lambda addr, i=idx: c_emu.shaengine.read_sts_h(addr, i),
-        lambda val, size, i=idx: c_emu.shaengine.write_sts_h(val, i)
-    ]
+idx_retqueue_regs_to_regmap(
+    _SHAENGINE_FUNC_MAP, KEYMGR_REGS["SHA"]["STS_H"],
+    c_emu.shaengine.read_sts_h, c_emu.shaengine.write_sts_h
+)
 
-for idx, offset in enumerate(KEYMGR_REGS["SHA"]["KEY_W"]):
-    _SHAENGINE_FUNC_MAP[offset] = [
-        lambda addr, i=idx: c_emu.shaengine.read_key_w(addr, i),
-        lambda val, size, i=idx: c_emu.shaengine.write_key_w(val, i)
-    ]
+idx_retqueue_regs_to_regmap(
+    _SHAENGINE_FUNC_MAP, KEYMGR_REGS["SHA"]["KEY_W"],
+    c_emu.shaengine.read_key_w, c_emu.shaengine.write_key_w
+)
 
 # When we add the _SHAENGINE_FUNC_MAP to _REG_FUNC_MAP, we use a lambda to wrap
 # around it to call it's respective queue function.
 for k, v in _SHAENGINE_FUNC_MAP.items():
     _REG_FUNC_MAP[k] = [
-        lambda addr, 
-        v=v: c_emu.shaengine.queue_read_worker_op(v[0], addr),
-        lambda val, 
-        size, 
-        v=v: c_emu.shaengine.queue_write_worker_op(v[1], val, size),
+        lambda size,
+        v=v: c_emu.shaengine.queue_read_worker_op(v[0], size),
+        lambda size, 
+        value, 
+        v=v: c_emu.shaengine.queue_write_worker_op(v[1], size, value),
     ]
 
-def component_handler(
+def component_read_handler(
     uc: qemu.Uc,
-    access,
-    address: int,
+    offset: int,
+    size: int,
+    user_data: typing.Any,
+) -> int:
+    try:
+        return _REG_FUNC_MAP[offset][0](size)
+    except KeyError:
+        unhandled_register_exit(prints, "KEYMGR0", offset)
+
+def component_write_handler(
+    uc: qemu.Uc,
+    offset: int,
     size: int,
     value: int,
-    user_data
-) -> bool:
-    """Main component handler for KEYMGR"""
-
-    reg_offset = address - _REG_BASE_ADDR
-
+    user_data: typing.Any,
+) -> None:
     try:
-        if access == qemu.UC_MEM_READ:
-            _REG_FUNC_MAP[reg_offset][0](address)
-        elif access == qemu.UC_MEM_WRITE:
-            _REG_FUNC_MAP[reg_offset][1](value, size)
-
+        _REG_FUNC_MAP[offset][1](size, value)
     except KeyError:
-        unhandled_register_exit(prints, "KEYMGR0", address)
+        unhandled_register_exit(prints, "KEYMGR0", offset)

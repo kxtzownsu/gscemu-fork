@@ -47,11 +47,6 @@ REG_DEFS = {
         "size": DEFAULT_REG_WITDH,
     },
 
-    "GLOBALSEC": { # Yes
-        "base_addr": 0x40090000,
-        "size": DEFAULT_REG_WITDH,
-    },
-
     "XO0": { # No
         "base_addr": 0x400b0000,
         "size": DEFAULT_REG_WITDH,
@@ -72,13 +67,25 @@ REG_DEFS = {
         "size": DEFAULT_REG_WITDH,
     },
 
-    "FUSE0": { # Yes
-        "base_addr": 0x40450000,
+    "SWDP0": { # No
+        "base_addr": 0x40520000,
         "size": DEFAULT_REG_WITDH,
     },
 
-    "SWDP0": { # No
-        "base_addr": 0x40520000,
+    "RTC0": { # No
+        "base_addr": 0x400a0000,
+        "size": DEFAULT_REG_WITDH,
+    },
+}
+
+MMIO_REG_DEFS = {
+    "GLOBALSEC": { # Yes
+        "base_addr": 0x40090000,
+        "size": DEFAULT_REG_WITDH,
+    },
+
+    "FUSE0": { # Yes
+        "base_addr": 0x40450000,
         "size": DEFAULT_REG_WITDH,
     },
 
@@ -92,24 +99,19 @@ REG_DEFS = {
         "size": DEFAULT_REG_WITDH
     },
 
-    "UART1": { # Yes
-        "base_addr": 0x40610000,
-        "size": DEFAULT_REG_WITDH
-    },
+    # "UART1": { # Yes
+    #     "base_addr": 0x40610000,
+    #     "size": DEFAULT_REG_WITDH
+    # },
 
-    "UART2": { # Yes
-        "base_addr": 0x40620000,
-        "size": DEFAULT_REG_WITDH
-    },
+    # "UART2": { # Yes
+    #     "base_addr": 0x40620000,
+    #     "size": DEFAULT_REG_WITDH
+    # },
 
     "FLASH0": { # Yes
         "base_addr": 0x40720000,
         "size": DEFAULT_REG_WITDH
-    },
-
-    "RTC0": { # No
-        "base_addr": 0x400a0000,
-        "size": DEFAULT_REG_WITDH,
     },
 
     "M3": { # Yes

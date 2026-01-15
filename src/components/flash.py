@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
+import typing
 import unicorn as qemu
 import queue
 import threading
@@ -9,8 +10,12 @@ import time
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from src.emulators.haven.registers import REG_DEFS, FLASH_REGS
-from lib.helpers import unhandled_register_exit, unhandled_register_io, BIT
+from src.emulators.haven.registers import FLASH_REGS
+from lib.helpers import (
+    unhandled_register_exit, 
+    unhandled_register_io, 
+    idx_retqueue_regs_to_regmap
+)
 
 # flash mappings:
 # bank0, control0 = RO_A + RW_A (0x40000 - 0x7ffff) -> flash bank(0x0 - 0x3ffff)
@@ -19,8 +24,6 @@ from lib.helpers import unhandled_register_exit, unhandled_register_io, BIT
 # bank1, control1 = INFO1       (0x28000 - 0x287ff) -> flash bank(0x0 - 0x7ff)
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
-
-_REG_BASE_ADDR = REG_DEFS["FLASH0"]["base_addr"]
 
 _FSH_START_ADDR_MAP = [
     [0x40000, 0x80000],
@@ -133,12 +136,14 @@ class FlashController:
             self.opworker.daemon = True
             self.opworker.start()
 
-    def queue_read_worker_op(self, target_fn, addr: int) -> None:
-        self.opqueue.put([target_fn, (addr,)])
+    def queue_read_worker_op(self, target_fn, size: int):
+        retqueue = queue.Queue()
+        self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
+        return retqueue.get_nowait()
         
-    def queue_write_worker_op(self, target_fn, val: int) -> None:
-        self.opqueue.put([target_fn, (val,)])
+    def queue_write_worker_op(self, target_fn, size: int, value: int):
+        self.opqueue.put([target_fn, (size, value)])
 
     def op_erase_block(self):
         # Check if INFO1 is erase locked.
@@ -235,10 +240,10 @@ class FlashController:
                 return
             self.error_placed_time = time.perf_counter()
 
-    def read_pe_control_0(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.pe_control)
+    def read_pe_control_0(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.pe_control)
 
-    def write_pe_control_0(self, val: int, *args, **kwargs) -> None:
+    def write_pe_control_0(self, size: int, value: int) -> None:
         # We do not need to handle the case of another write changing the opcode
         # and PE_CONTROL values. On this write, the queue cycle would
         # immediately process it already. Subsequent writes will see a cleared
@@ -248,13 +253,13 @@ class FlashController:
         if self.pe_en != _FSH_PE_EN_MAGIC:
             return
         
-        self.opcode = val
+        self.opcode = value
         self.pe_control = 0
 
-    def read_pe_control_1(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.pe_control)
+    def read_pe_control_1(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.pe_control)
 
-    def write_pe_control_1(self, val: int, *args, **kwargs) -> None:
+    def write_pe_control_1(self, size: int, value: int) -> None:
         # We do not need to handle the case of another write changing the opcode
         # and PE_CONTROL values. On this write, the queue cycle would
         # immediately process it already. Subsequent writes will see a cleared
@@ -264,60 +269,60 @@ class FlashController:
         if self.pe_en != _FSH_PE_EN_MAGIC:
             return
         
-        self.opcode = val
+        self.opcode = value
         self.pe_control = 1
 
-    def read_pe_en(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.pe_en)
+    def read_pe_en(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.pe_en)
 
-    def write_pe_en(self, val: int, *args, **kwargs) -> None:
-        self.pe_en = val
+    def write_pe_en(self, size: int, value: int) -> None:
+        self.pe_en = value
 
-    def read_trans(self, addr: int, *args, **kwargs) -> None:
+    def read_trans(self, size: int, queue: queue.Queue) -> None:
         val = (
             self.trans_offset |
             (self.trans_mainb << 16) |
             (self.trans_size << 17)
         )
-        ucmutex().int32_mem_write(addr, val)
+        queue.put(val)
 
-    def write_trans(self, val: int, *args, **kwargs) -> None:
-        self.trans_offset = val & 0xffff
-        self.trans_mainb = (val & 0x10000) >> 16
-        self.trans_size = ((val & 0x3e0000) >> 17)
+    def write_trans(self, size: int, value: int) -> None:
+        self.trans_offset = value & 0xffff
+        self.trans_mainb = (value & 0x10000) >> 16
+        self.trans_size = ((value & 0x3e0000) >> 17)
 
-    def read_error(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.error_code)
+    def read_error(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.error_code)
 
-    def write_error(self, *args, **kwargs) -> None:
+    def write_error(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "FLASH0", "FSH_ERROR")
 
-    def read_protect_info1_erase(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.protect_info1_erase)
+    def read_protect_info1_erase(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.protect_info1_erase)
 
-    def write_protect_info1_erase(self, val: int, *args, **kwargs) -> None:
+    def write_protect_info1_erase(self, size: int, value: int) -> None:
         # TODO(appleflyer): Should we allow PROTECT_INFO1_ERASE disabling? Test
         # with RMASmoke
         if not self.protect_info1_erase:
-            self.protect_info1_erase = val
+            self.protect_info1_erase = value
 
-    def read_dout_val0(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.dout_val[0])
+    def read_dout_val0(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.dout_val[0])
 
-    def write_dout_val0(self, *args, **kwargs) -> None:
+    def write_dout_val0(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "FLASH0", "DOUT_VAL0")
 
-    def read_dout_val1(self, addr: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.dout_val[1])
+    def read_dout_val1(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.dout_val[1])
 
-    def write_dout_val1(self, *args, **kwargs) -> None:
+    def write_dout_val1(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "FLASH0", "DOUT_VAL1")
 
-    def read_wr_data(self, addr: int, index: int, *args, **kwargs) -> None:
-        ucmutex().int32_mem_write(addr, self.wr_data[index])
+    def read_wr_data(self, size: int, queue: queue.Queue, index: int) -> None:
+        queue.put(self.wr_data[index])
 
-    def write_wr_data(self, val: int, index: int, *args, **kwargs) -> None:
-        self.wr_data[index] = val
+    def write_wr_data(self, size: int, value: int, index: int) -> None:
+        self.wr_data[index] = value
 
 c_emu = FlashController()
 c_emu.start_worker()
@@ -349,31 +354,30 @@ _REG_FUNC_MAP = {
     ],
 }
 
-for idx, offset in enumerate(FLASH_REGS["WR_DATA"]):
-    _REG_FUNC_MAP[offset] = [
-        lambda addr, i=idx: c_emu.read_wr_data(addr, i),
-        lambda val, i=idx: c_emu.write_wr_data(val, i)
-    ]
+idx_retqueue_regs_to_regmap(
+    _REG_FUNC_MAP, FLASH_REGS["WR_DATA"], 
+    c_emu.read_wr_data, c_emu.write_wr_data
+)
 
-def component_handler(
+def component_read_handler(
     uc: qemu.Uc,
-    access,
-    address: int,
+    offset: int,
+    size: int,
+    user_data: typing.Any,
+) -> int:
+    try:
+        return c_emu.queue_read_worker_op(_REG_FUNC_MAP[offset][0], size)
+    except KeyError:
+        unhandled_register_exit(prints, "FLASH0", offset)
+
+def component_write_handler(
+    uc: qemu.Uc,
+    offset: int,
     size: int,
     value: int,
-    user_data
-) -> bool:
-    """Main component handler for FLASH"""
-
-    # If we do intend to support UART1 and 2, this code needs to be refactored
-    # for such a purpose. The code only supports UART0 reads/writes for now.
-    reg_offset = address - _REG_BASE_ADDR
-
+    user_data: typing.Any,
+) -> None:
     try:
-        if access == qemu.UC_MEM_READ:
-            c_emu.queue_read_worker_op(_REG_FUNC_MAP[reg_offset][0], address)
-        elif access == qemu.UC_MEM_WRITE:
-            c_emu.queue_write_worker_op(_REG_FUNC_MAP[reg_offset][1], value)
-
+        c_emu.queue_write_worker_op(_REG_FUNC_MAP[offset][1], size, value)
     except KeyError:
-        unhandled_register_exit(prints, "UART0", address)
+        unhandled_register_exit(prints, "FLASH0", offset)

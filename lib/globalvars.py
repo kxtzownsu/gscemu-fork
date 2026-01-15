@@ -14,9 +14,6 @@ UNICORN_MEM_INVALID_HOOKS = (qemu.UC_HOOK_MEM_READ_UNMAPPED |
                              qemu.UC_HOOK_MEM_WRITE_UNMAPPED |
                              qemu.UC_HOOK_MEM_FETCH_UNMAPPED)
 
-UNICORN_MEM_IO_HOOKS = (qemu.UC_HOOK_MEM_READ |
-                        qemu.UC_HOOK_MEM_WRITE)
-
 # It is important that these variables are assigned to an object
 # before they are used. If the developer calls the ucmutex function without
 # initializing the variable, it is simply developer negligence and we should

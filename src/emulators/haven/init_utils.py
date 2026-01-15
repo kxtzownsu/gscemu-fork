@@ -9,15 +9,17 @@
 # as much as possible and not consider extra initialization time as wasted time.
 
 import unicorn as qemu
+import traceback
 
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 from .registers import REG_DEFS
+from .mmio_map import MMIO_HANDLERS
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-def map_memory(mem_map_list: list) -> bool:
+def map_memory(qemu_mem_map_list: list, mmio_mem_map_list: list) -> bool:
     """Helper function to map memory in the emulator.
     
     This is required or we will encounter issues within the emulator where the
@@ -26,8 +28,9 @@ def map_memory(mem_map_list: list) -> bool:
     everything at once(0x0 to 0xFFFFFFFF).
     """
 
+    # Map QEMU managed memory.
     try:
-        for i in mem_map_list.items():
+        for i in qemu_mem_map_list.items():
             prints.debug(f"Mapping {i[0]} with " +
                         f"addr=0x{i[1]["base_addr"]:x}" +
                         f",size=0x{i[1]["size"]:x}")
@@ -39,6 +42,27 @@ def map_memory(mem_map_list: list) -> bool:
         # We failed to map the memory, possibly because the base_addr or size
         # was invalid. This is a dev issue and even so, we should handle it
         # properly, to accomodate for forks of this repository.
+        return False
+    
+    # Map ComponentHandler managed memory.
+    try:
+        for i in mmio_mem_map_list.items():
+            prints.debug(f"Mapping {i[0]} with " +
+                        f"addr=0x{i[1]["base_addr"]:x}" +
+                        f",size=0x{i[1]["size"]:x}")
+            g_uc().mmio_map(
+                i[1]["base_addr"], 
+                i[1]["size"],
+                MMIO_HANDLERS[i[0]][0],
+                None,
+                MMIO_HANDLERS[i[0]][1],
+                None,        
+            )
+    except Exception as e:
+        # We failed to map the memory, possibly because the base_addr or size
+        # was invalid. This is a dev issue and even so, we should handle it
+        # properly, to accomodate for forks of this repository.
+        traceback.print_exc()
         return False
     
     return True
