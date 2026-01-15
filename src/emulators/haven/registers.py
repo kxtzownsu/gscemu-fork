@@ -42,7 +42,7 @@ REG_DEFS = {
         "size": DEFAULT_REG_WITDH,
     },
 
-    "GPIO": { # No
+    "PINMUX": { # No
         "base_addr": 0x40060000,
         "size": DEFAULT_REG_WITDH,
     },
@@ -54,6 +54,16 @@ REG_DEFS = {
 
     "GPIO0": { # No
         "base_addr": 0x40200000,
+        "size": DEFAULT_REG_WITDH,
+    },
+
+    "GPIO1": { # No
+        "base_addr": 0x40210000,
+        "size": DEFAULT_REG_WITDH,
+    },
+
+    "USB0": { # No
+        "base_addr": 0x40300000,
         "size": DEFAULT_REG_WITDH,
     },
 
@@ -257,6 +267,10 @@ M3_REGS = {
 
 KEYMGR_REGS = {
     "HKEY_RWR": _reg_list(0x3000, 8),
+    "HKEY_FWR": _reg_list(0x3100, 8),
+    "FW_MAJOR_VERSION": 0x3124,
+    "FWR_VLD": 0x3120,
+    "FWR_LOCK": 0x3128,
     "RWR_VLD": 0x3020,
     "RWR_LOCK": 0x3024,
     "CERT_REVOKE_CTRL": _reg_list(0x4a8, 3),

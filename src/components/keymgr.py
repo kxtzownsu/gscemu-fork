@@ -325,10 +325,15 @@ class KeymgrController:
             0xa8028a82, 0xaaaaaaaa, 0xaaaa
         ]
 
+        self.fw_major_version = 0
+
         self.hkey_rwr = [0] * 8
+        self.hkey_fwr = [0] * 8
         self.hkey_err_flags = 0
 
+        self.fwr_vld = 0
         self.rwr_vld = 0
+        self.fwr_lock = 0
         self.rwr_lock = 0
 
         self.shaengine.start_worker()
@@ -343,6 +348,24 @@ class KeymgrController:
         with self.mutex:
             self.hkey_rwr[index] = value
 
+    def read_hkey_fwr(self, size: int, index: int) -> None:
+        with self.mutex:
+            return self.hkey_fwr[index]
+
+    def write_hkey_fwr(
+        self, size: int, value: int, index: int
+    ) -> None:
+        with self.mutex:
+            self.hkey_fwr[index] = value
+
+    def read_fw_major_version(self, size: int) -> None:
+        with self.mutex:
+            return self.fw_major_version
+
+    def write_fw_major_version(self, size: int, value: int) -> None:
+        with self.mutex:
+            self.fw_major_version = value
+
     def read_hkey_err_flags(self, size: int) -> None:
         with self.mutex:
             return self.hkey_err_flags
@@ -351,6 +374,14 @@ class KeymgrController:
         with self.mutex:
             self.hkey_err_flags = value
 
+    def read_fwr_vld(self, size: int) -> None:
+        with self.mutex:
+            return self.fwr_vld
+
+    def write_fwr_vld(self, size: int, value: int) -> None:
+        with self.mutex:
+            self.fwr_vld = value
+
     def read_rwr_vld(self, size: int) -> None:
         with self.mutex:
             return self.rwr_vld
@@ -358,6 +389,14 @@ class KeymgrController:
     def write_rwr_vld(self, size: int, value: int) -> None:
         with self.mutex:
             self.rwr_vld = value
+
+    def read_fwr_lock(self, size: int) -> None:
+        with self.mutex:
+            return self.fwr_lock
+
+    def write_fwr_lock(self, size: int, value: int) -> None:
+        with self.mutex:
+            self.fwr_lock = value
 
     def read_rwr_lock(self, size: int) -> None:
         with self.mutex:
@@ -385,9 +424,17 @@ class KeymgrController:
 c_emu = KeymgrController()
 
 _REG_FUNC_MAP = {
+    KEYMGR_REGS["FWR_VLD"]: [
+        c_emu.read_fwr_vld,
+        c_emu.write_fwr_vld,
+    ],
     KEYMGR_REGS["RWR_VLD"]: [
         c_emu.read_rwr_vld,
         c_emu.write_rwr_vld,
+    ],
+    KEYMGR_REGS["FWR_LOCK"]: [
+        c_emu.read_fwr_lock,
+        c_emu.write_fwr_lock,
     ],
     KEYMGR_REGS["RWR_LOCK"]: [
         c_emu.read_rwr_lock,
@@ -396,6 +443,10 @@ _REG_FUNC_MAP = {
     KEYMGR_REGS["HKEY_ERR_FLAGS"]: [
         c_emu.read_hkey_err_flags,
         c_emu.write_hkey_err_flags,
+    ],
+    KEYMGR_REGS["FW_MAJOR_VERSION"]: [
+        c_emu.read_fw_major_version,
+        c_emu.write_fw_major_version,
     ],
 }
 
@@ -445,6 +496,11 @@ _SHAENGINE_FUNC_MAP = {
 idx_regs_to_regmap(
     _REG_FUNC_MAP, KEYMGR_REGS["HKEY_RWR"],
     c_emu.read_hkey_rwr, c_emu.write_hkey_rwr
+)
+
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, KEYMGR_REGS["HKEY_FWR"],
+    c_emu.read_hkey_fwr, c_emu.write_hkey_fwr
 )
 
 idx_regs_to_regmap(
