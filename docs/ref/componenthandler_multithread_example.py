@@ -10,7 +10,6 @@ import threading
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from lib.threadutils import FifoLock
 from src.emulators.haven.registers import XX_REGS
 from lib.helpers import unhandled_register_exit
 
@@ -68,7 +67,7 @@ def component_read_handler(
     try:
         return c_emu.queue_read_worker_op(_REG_FUNC_MAP[offset][0], size)
     except KeyError:
-        unhandled_register_exit(prints, "M3", offset)
+        unhandled_register_exit(prints, "XX", offset)
 
 def component_write_handler(
     uc: qemu.Uc,
@@ -80,4 +79,4 @@ def component_write_handler(
     try:
         c_emu.queue_read_worker_op(_REG_FUNC_MAP[offset][1], size, value)
     except KeyError:
-        unhandled_register_exit(prints, "M3", offset)
+        unhandled_register_exit(prints, "XX", offset)

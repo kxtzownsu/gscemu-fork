@@ -6,9 +6,6 @@ from lib.logger import GscemuLogger
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-def BIT(bit) -> int:
-    return 1 << bit
-
 def unhandled_register_exit(
     logger: GscemuLogger, 
     component: str, 

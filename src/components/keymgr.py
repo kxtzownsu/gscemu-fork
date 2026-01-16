@@ -62,8 +62,7 @@ class ShaEngine:
         while True:
             try:
                 # Wait for the next operation to enter the queue
-                op = self.opqueue.get()
-                target_fn, args = op
+                target_fn, args = self.opqueue.get()
                 
                 target_fn(*args) # Splat our arguments into the target_fn
 

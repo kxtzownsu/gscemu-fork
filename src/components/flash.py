@@ -82,8 +82,7 @@ class FlashController:
         while True:
             try:
                 # Wait for the next operation to enter the queue
-                op = self.opqueue.get()
-                target_fn, args = op
+                target_fn, args = self.opqueue.get()
 
                 # If an error_code exists, we need to clear it after a certain
                 # period of time.

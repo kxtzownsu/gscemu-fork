@@ -192,9 +192,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_dlyctr[index]["EN"][en_index] = value
 
-    def read_alert_dlyctr_shutdown_en(
-            self, size: int, index: int
-        ) -> None:
+    def read_alert_dlyctr_shutdown_en(self, size: int, index: int) -> None:
         with self.mutex:
             return self.alert_dlyctr[index]["SHUTDOWN_EN"]
 
@@ -214,9 +212,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_dlyctr[index]["CLEAR"] = value
 
-    def read_alert_group_en(
-            self, size: int, index: int, en_index: int
-        ) -> None:
+    def read_alert_group_en(self, size: int, index: int, en_index: int) -> None:
         with self.mutex:
             return self.alert_group[index]["EN"][en_index]
 
@@ -226,21 +222,15 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_group[index]["EN"][en_index] = value
 
-    def read_alert_group_ctr(
-            self, size: int, index: int
-        ) -> None:
+    def read_alert_group_ctr(self, size: int, index: int) -> None:
         with self.mutex:
             return self.alert_group[index]["CTR"]
 
-    def write_alert_group_ctr(
-            self, size: int, value: int, index: int
-        ) -> None:
+    def write_alert_group_ctr(self, size: int, value: int, index: int) -> None:
         with self.mutex:
             self.alert_group[index]["CTR"] = value
 
-    def read_alert_group_threshold(
-            self, size: int, index: int
-        ) -> None:
+    def read_alert_group_threshold(self, size: int, index: int) -> None:
         with self.mutex:
             return self.alert_group[index]["THRESHOLD"]
 

@@ -17,13 +17,16 @@ prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class ComponentXX:
     def __init__(self):
+        self.opmutex = FifoLock()
         self.xy = 0
 
     def read_xy(self, size: int):
-        return self.xy
+        with self.opmutex:
+            return self.xy
     
     def write_xy(self, size: int, value: int):
-        self.xy = value
+        with self.opmutex:
+            self.xy = value
 
 c_emu = ComponentXX()
 
@@ -40,7 +43,7 @@ def component_read_handler(
     try:
         return _REG_FUNC_MAP[offset][0](size)
     except KeyError:
-        unhandled_register_exit(prints, "M3", offset)
+        unhandled_register_exit(prints, "XX", offset)
 
 def component_write_handler(
     uc: qemu.Uc,
@@ -52,4 +55,4 @@ def component_write_handler(
     try:
         _REG_FUNC_MAP[offset][1](size, value)
     except KeyError:
-        unhandled_register_exit(prints, "M3", offset)
+        unhandled_register_exit(prints, "XX", offset)

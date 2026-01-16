@@ -78,10 +78,10 @@ def prepare_info1_space() -> None:
     )
 
 def load_firmware(
-        mem_map_list: list, 
-        fw_paths: dict,
-        strict_file_size_checks: bool | None = True,
-    ) -> bool:
+    mem_map_list: list, 
+    fw_paths: dict,
+    strict_file_size_checks: bool | None = True,
+) -> bool:
     """Load firmware into the FLASH_BROM + FLASH_PROG region.
     
     Args:

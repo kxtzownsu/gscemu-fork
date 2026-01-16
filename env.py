@@ -4,7 +4,7 @@
 from lib.logger import GscemuLoggerSettings
 
 GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(
-    global_switch=True,
+    global_switch=False,
     debug_prints=True,
     info_prints=True,
     warning_prints=True,

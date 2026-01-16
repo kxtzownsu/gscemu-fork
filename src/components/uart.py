@@ -32,8 +32,7 @@ class UartController:
         while True:
             try:
                 # Wait for the next operation to enter the queue
-                op = self.opqueue.get()
-                target_fn, args = op
+                target_fn, args = self.opqueue.get()
 
                 # update STATE based on input queue
                 if self.input_queue.empty():
