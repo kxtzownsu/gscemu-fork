@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
+import inspect
 import typing
 
 from lib.globalvars import *
@@ -28,28 +29,42 @@ def args_lambda_gen(
     reg_fn: typing.Callable, *fixed_args
 ) -> typing.Callable:
     """Returns a lambda object to handle fixed argument values for a function.
+
+    We can infer the number of changing arguments from the number of fixed
+    arguments passed to us and the number of arguments that reg_fn expects.
+    With this, we assume all fixed arguments are at the front, and changing
+    arguments at the back in order. 
+    
+    This is a powerful macro to remove expanding (*args, **kwargs) every 
+    function call, although very costly at the start which takes up a lot of 
+    setup time.
     
     Example:
-        regread_lambda_gen(reg_fn, 2, 10) -> lambda x, y: reg_fn(x, y, 10)
+        reg_fn(x, y, z)
+        args_lambda_gen(reg_fn, 10) -> lambda x, y: reg_fn(x, y, 10)
     """
+    # If we are in a class, we need to -1, because the "self" argument is also
+    # counted.
+    is_class = int(inspect.ismethod(reg_fn))
 
-    # We need to use eval here. Of course, this will slow down initialization,
-    # but it is better than runtime slowdown.
-
-    num_changing_args = reg_fn.__code__.co_argcount - 1 - len(fixed_args)
+    num_changing_args = reg_fn.__code__.co_argcount - is_class - len(fixed_args)
     
     argenv = {}
     argenv["reg_fn"] = reg_fn
 
+    # Generate the changing args argstring (a0, a1, a2)
     changing_argstring = str()
     for argnum in range(num_changing_args):
         if argnum > 0:
             changing_argstring = changing_argstring + ", "
         changing_argstring = changing_argstring + f"a{argnum}"
 
+    # Generate the fixed args argstring (b0, b1, b2)
     fixed_argstring = str()
     for argnum, argval in enumerate(fixed_args):
-        fixed_argstring = fixed_argstring + f", b{argnum}"
+        if num_changing_args > 0 or argnum > 0:
+            fixed_argstring = fixed_argstring + ", "
+        fixed_argstring = fixed_argstring + f"b{argnum}"
         argenv[f"b{argnum}"] = argval
 
     return eval(
