@@ -19,7 +19,7 @@ from .mmio_map import MMIO_HANDLERS
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-def map_memory(qemu_mem_map_list: list, mmio_mem_map_list: list) -> bool:
+def map_memory(qemu_mem_map_list: dict, mmio_mem_map_list: dict) -> bool:
     """Helper function to map memory in the emulator.
     
     This is required or we will encounter issues within the emulator where the
@@ -78,7 +78,7 @@ def prepare_info1_space() -> None:
     )
 
 def load_firmware(
-    mem_map_list: list, 
+    mem_map_list: dict, 
     fw_paths: dict,
     strict_file_size_checks: bool | None = True,
 ) -> bool:
