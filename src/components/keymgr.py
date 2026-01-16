@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
-import functools
 import typing
 import unicorn as qemu
 import queue
@@ -18,7 +17,8 @@ from src.emulators.haven.registers import REG_DEFS, KEYMGR_REGS
 from lib.helpers import (
     unhandled_register_io, 
     unhandled_register_exit,
-    idx_regs_to_regmap
+    idx_regs_to_regmap,
+    args_lambda_gen
 )
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
@@ -519,8 +519,8 @@ idx_regs_to_regmap(
 
 for k, v in _SHAENGINE_FUNC_MAP.items():
     _REG_FUNC_MAP[k] = [
-        functools.partial(c_emu.shaengine.queue_read_worker_op, target_fn=v[0]),
-        functools.partial(c_emu.shaengine.queue_write_worker_op, target_fn=v[1])
+        args_lambda_gen(c_emu.shaengine.queue_read_worker_op, v[0]),
+        args_lambda_gen(c_emu.shaengine.queue_write_worker_op, v[1])
     ]
 
 def component_read_handler(
