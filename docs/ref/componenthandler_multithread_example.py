@@ -37,13 +37,13 @@ class ComponentXX:
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, target_fn, size: int):
+    def queue_read_worker_op(self, size: int, target_fn):
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
         
-    def queue_write_worker_op(self, target_fn, size: int, value: int):
+    def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
     def read_xy(self, size: int, queue: queue.Queue):
@@ -65,7 +65,7 @@ def component_read_handler(
     user_data: typing.Any,
 ) -> int:
     try:
-        return c_emu.queue_read_worker_op(_REG_FUNC_MAP[offset][0], size)
+        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
     except KeyError:
         unhandled_register_exit(prints, "XX", offset)
 
@@ -77,6 +77,6 @@ def component_write_handler(
     user_data: typing.Any,
 ) -> None:
     try:
-        c_emu.queue_read_worker_op(_REG_FUNC_MAP[offset][1], size, value)
+        c_emu.queue_read_worker_op(size, value, _REG_FUNC_MAP[offset][1])
     except KeyError:
         unhandled_register_exit(prints, "XX", offset)

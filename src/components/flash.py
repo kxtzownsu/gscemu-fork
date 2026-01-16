@@ -14,7 +14,7 @@ from src.emulators.haven.registers import FLASH_REGS
 from lib.helpers import (
     unhandled_register_exit, 
     unhandled_register_io, 
-    idx_retqueue_regs_to_regmap
+    idx_regs_to_regmap
 )
 
 # flash mappings:
@@ -92,8 +92,8 @@ class FlashController:
                 target_fn(*args) # Splat the arguments into the target_fn
 
                 # For write operations, this doesn't do anything. For read
-                # operations, we need to tell the handler that we have written
-                # the value into the address, and execution can proceed.
+                # operations, we need to tell the handler that we have processed
+                # the value, and execution can proceed.
                 self.opqueue.task_done()
 
                 if not self.pe_control:
@@ -135,13 +135,13 @@ class FlashController:
             self.opworker.daemon = True
             self.opworker.start()
 
-    def queue_read_worker_op(self, target_fn, size: int):
+    def queue_read_worker_op(self, size: int, target_fn):
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
         
-    def queue_write_worker_op(self, target_fn, size: int, value: int):
+    def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
     def op_erase_block(self):
@@ -353,7 +353,7 @@ _REG_FUNC_MAP = {
     ],
 }
 
-idx_retqueue_regs_to_regmap(
+idx_regs_to_regmap(
     _REG_FUNC_MAP, FLASH_REGS["WR_DATA"], 
     c_emu.read_wr_data, c_emu.write_wr_data
 )
@@ -365,7 +365,7 @@ def component_read_handler(
     user_data: typing.Any,
 ) -> int:
     try:
-        return c_emu.queue_read_worker_op(_REG_FUNC_MAP[offset][0], size)
+        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
     except KeyError:
         unhandled_register_exit(prints, "FLASH0", offset)
 
@@ -377,6 +377,6 @@ def component_write_handler(
     user_data: typing.Any,
 ) -> None:
     try:
-        c_emu.queue_write_worker_op(_REG_FUNC_MAP[offset][1], size, value)
+        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
     except KeyError:
         unhandled_register_exit(prints, "FLASH0", offset)

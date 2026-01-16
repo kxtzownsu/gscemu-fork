@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
+import functools
 import typing
 import unicorn as qemu
 import queue
@@ -17,8 +18,7 @@ from src.emulators.haven.registers import REG_DEFS, KEYMGR_REGS
 from lib.helpers import (
     unhandled_register_io, 
     unhandled_register_exit,
-    idx_regs_to_regmap,
-    idx_retqueue_regs_to_regmap
+    idx_regs_to_regmap
 )
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
@@ -67,8 +67,8 @@ class ShaEngine:
                 target_fn(*args) # Splat our arguments into the target_fn
 
                 # For write operations, this doesn't do anything. For read
-                # operations, we need to tell the handler that we have written
-                # the value into the address, and execution can proceed.
+                # operations, we need to tell the handler that we have processed
+                # the value, and execution can proceed.
                 self.opqueue.task_done()
 
                 # Now, the SHA engine needs to check if we need to proceed with
@@ -186,13 +186,13 @@ class ShaEngine:
         self.start_hash = False
         self.input_fifo = bytearray()
 
-    def queue_read_worker_op(self, target_fn, size: int):
+    def queue_read_worker_op(self, size: int, target_fn):
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
         
-    def queue_write_worker_op(self, target_fn, size: int, value: int):
+    def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
     def read_cfg_msglen_lo(self, size: int, queue: queue.Queue) -> None:
@@ -507,25 +507,20 @@ idx_regs_to_regmap(
     c_emu.read_cert_revoke_ctrl, c_emu.write_cert_revoke_ctrl
 )
 
-idx_retqueue_regs_to_regmap(
+idx_regs_to_regmap(
     _SHAENGINE_FUNC_MAP, KEYMGR_REGS["SHA"]["STS_H"],
     c_emu.shaengine.read_sts_h, c_emu.shaengine.write_sts_h
 )
 
-idx_retqueue_regs_to_regmap(
+idx_regs_to_regmap(
     _SHAENGINE_FUNC_MAP, KEYMGR_REGS["SHA"]["KEY_W"],
     c_emu.shaengine.read_key_w, c_emu.shaengine.write_key_w
 )
 
-# When we add the _SHAENGINE_FUNC_MAP to _REG_FUNC_MAP, we use a lambda to wrap
-# around it to call it's respective queue function.
 for k, v in _SHAENGINE_FUNC_MAP.items():
     _REG_FUNC_MAP[k] = [
-        lambda size,
-        v=v: c_emu.shaengine.queue_read_worker_op(v[0], size),
-        lambda size, 
-        value, 
-        v=v: c_emu.shaengine.queue_write_worker_op(v[1], size, value),
+        functools.partial(c_emu.shaengine.queue_read_worker_op, target_fn=v[0]),
+        functools.partial(c_emu.shaengine.queue_write_worker_op, target_fn=v[1])
     ]
 
 def component_read_handler(

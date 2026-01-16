@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
+import functools
+
 from lib.globalvars import *
 from lib.logger import GscemuLogger
 
@@ -22,18 +24,6 @@ def unhandled_register_io(
 ) -> None:
     logger.warning(f"Unhandled {io_type} to {component}, {subcomponent}!")
 
-def idx_retqueue_regs_to_regmap(
-    regmap: list,
-    reglist: list,
-    read_fn,
-    write_fn,
-) -> None:
-    for idx, offset in enumerate(reglist):
-        regmap[offset] = [
-            lambda size, retqueue, i=idx: read_fn(size, retqueue, i),
-            lambda size, value, i=idx: write_fn(size, value, i)
-        ]
-
 def idx_regs_to_regmap(
     regmap: list,
     reglist: list,
@@ -42,8 +32,8 @@ def idx_regs_to_regmap(
 ) -> None:
     for idx, offset in enumerate(reglist):
         regmap[offset] = [
-            lambda size, i=idx: read_fn(size, i),
-            lambda size, value, i=idx: write_fn(size, value, i)
+            functools.partial(read_fn, index=idx),
+            functools.partial(write_fn, index=idx)
         ]
 
 def halt_emulation():

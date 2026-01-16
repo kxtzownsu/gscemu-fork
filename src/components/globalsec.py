@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
+import functools
+import typing
 import unicorn as qemu
 
-import typing
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
@@ -267,11 +268,11 @@ class HavenGlobalsec:
         with self.mutex:
             self.decrement_permission_runlevel(reg_offset)
         
-    def read_dummykey(self, size: int, idx: int) -> None:
+    def read_dummykey(self, size: int, index: int) -> None:
         with self.mutex:
             return self.dummykey[idx]
 
-    def write_dummykey(self, size: int, value: int, idx: int) -> None:
+    def write_dummykey(self, size: int, value: int, index: int) -> None:
         with self.mutex:
             self.dummykey[idx] = value
 
@@ -407,15 +408,18 @@ for reg_type in ["CTRL", "CTRL_CFG_EN", "BASE_ADDR", "SIZE"]:
     for bus_master, offsets in GLOBALSEC_REGS["REGION"][reg_type].items():
         for idx, offset in enumerate(offsets):
             _REG_FUNC_MAP[offset] = [
-                lambda size, 
-                rt=reg_type_lower, 
-                bm=bus_master, 
-                i=idx: c_emu.read_region_register(size, rt, bm, i),
-                lambda size, 
-                value, 
-                rt=reg_type_lower, 
-                bm=bus_master, 
-                i=idx: c_emu.write_region_register(size, value, rt, bm, i)
+                functools.partial(
+                    c_emu.read_region_register,
+                    reg_type=reg_type_lower,
+                    bus_master=bus_master,
+                    index=idx
+                ),
+                functools.partial(
+                    c_emu.write_region_register,
+                    reg_type=reg_type_lower,
+                    bus_master=bus_master,
+                    index=idx
+                )
             ]
 
 idx_regs_to_regmap(
@@ -430,62 +434,48 @@ idx_regs_to_regmap(
 
 for idx, dlyctr in enumerate(GLOBALSEC_REGS["ALERT"]["DLYCTR"]):
     _REG_FUNC_MAP[dlyctr["BASE"]] = [
-        lambda size, 
-        i=idx: c_emu.read_alert_dlyctr_base(size, i),
-        lambda size, 
-        value, 
-        i=idx: c_emu.write_alert_dlyctr_base(size, value, i)
+        functools.partial(c_emu.read_alert_dlyctr_base, index=idx),
+        functools.partial(c_emu.write_alert_dlyctr_base, index=idx)
     ]
     _REG_FUNC_MAP[dlyctr["LEN"]] = [
-        lambda size, 
-        i=idx: c_emu.read_alert_dlyctr_len(size, i),
-        lambda size, 
-        value, i=idx: c_emu.write_alert_dlyctr_len(size, value, i)
+        functools.partial(c_emu.read_alert_dlyctr_len, index=idx),
+        functools.partial(c_emu.write_alert_dlyctr_len, index=idx)
     ]
     for en_idx, en_offset in enumerate(dlyctr["EN"]):
         _REG_FUNC_MAP[en_offset] = [
-            lambda size, 
-            i=idx, 
-            ei=en_idx: c_emu.read_alert_dlyctr_en(size, i, ei),
-            lambda 
-            size,
-            value, 
-            i=idx, 
-            ei=en_idx: c_emu.write_alert_dlyctr_en(size, value, i, ei)
+            functools.partial(
+                c_emu.read_alert_dlyctr_en, index=idx, en_index=en_idx
+            ),
+            functools.partial(
+                c_emu.write_alert_dlyctr_en, index=idx, en_index=en_idx
+            )
         ]
     _REG_FUNC_MAP[dlyctr["SHUTDOWN_EN"]] = [
-        lambda size, 
-        i=idx: c_emu.read_alert_dlyctr_shutdown_en(size, i),
-        lambda size, 
-        value, 
-        i=idx: c_emu.write_alert_dlyctr_shutdown_en(size, value, i)
+        functools.partial(c_emu.read_alert_dlyctr_shutdown_en, index=idx),
+        functools.partial(c_emu.write_alert_dlyctr_shutdown_en, index=idx)
     ]
     _REG_FUNC_MAP[dlyctr["CLEAR"]] = [
-        lambda size, 
-        i=idx: c_emu.read_alert_dlyctr_clear(size, i),
-        lambda size, 
-        value, 
-        i=idx: c_emu.write_alert_dlyctr_clear(size, value, i)
+        functools.partial(c_emu.read_alert_dlyctr_clear, index=idx),
+        functools.partial(c_emu.write_alert_dlyctr_clear, index=idx)
     ]
 
 for idx, group in enumerate(GLOBALSEC_REGS["ALERT"]["GROUP"]):
     for en_idx, en_offset in enumerate(group["EN"]):
         _REG_FUNC_MAP[en_offset] = [
-            lambda size, 
-            i=idx, 
-            ei=en_idx: c_emu.read_alert_group_en(size, i, ei),
-            lambda size,
-            val, 
-            i=idx, 
-            ei=en_idx: c_emu.write_alert_group_en(size, val, i, ei)
+            functools.partial(
+                c_emu.read_alert_group_en, index=idx, en_index=en_idx
+            ),
+            functools.partial(
+                c_emu.read_alert_group_en, index=idx, en_index=en_idx
+            ),
         ]
     _REG_FUNC_MAP[group["CTR"]] = [
-        lambda size, i=idx: c_emu.read_alert_group_ctr(size, i),
-        lambda size, val, i=idx: c_emu.write_alert_group_ctr(size, val, i)
+        functools.partial(c_emu.read_alert_group_ctr, index=idx),
+        functools.partial(c_emu.write_alert_group_ctr, index=idx)
     ]
     _REG_FUNC_MAP[group["THRESHOLD"]] = [
-        lambda size, i=idx: c_emu.read_alert_group_threshold(size, i),
-        lambda size, val, i=idx: c_emu.write_alert_group_threshold(size, val, i)
+        functools.partial(c_emu.read_alert_group_threshold, index=idx),
+        functools.partial(c_emu.write_alert_group_threshold, index=idx)
     ]
 
 idx_regs_to_regmap(
@@ -503,10 +493,12 @@ for perm in [
     "DDMA0_PERMISSION", "SOFTWARE_LVL"
 ]:
     _REG_FUNC_MAP[GLOBALSEC_REGS[perm]] = [
-        lambda size, reg_offset=GLOBALSEC_REGS[perm]: 
-        c_emu.read_permission_runlevel(size, reg_offset),
-        lambda size, value, reg_offset=GLOBALSEC_REGS[perm]: 
-        c_emu.write_permission_runlevel(size, value, reg_offset)
+        functools.partial(
+            c_emu.read_permission_runlevel, reg_offset=GLOBALSEC_REGS[perm]
+        ),
+        functools.partial(
+            c_emu.write_permission_runlevel, reg_offset=GLOBALSEC_REGS[perm]
+        ),
     ]
 
 def component_read_handler(
