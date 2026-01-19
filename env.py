@@ -15,3 +15,8 @@ GSCEMULATOR_FW_PATHS = {
     "firmware": "fw/cr50/0_5_271.bin"
 }
 GSCEMULATOR_FW_STRICT_SIZE_CHECKING = False
+
+GSCEMULATOR_PC_LOGGING_SETTINGS = {
+    "log_pc": False,
+    "log_file_path": "./pc.txt",
+}

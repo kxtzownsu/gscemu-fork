@@ -32,17 +32,11 @@ def g_uc() -> qemu.Uc:
 def ucmutex() -> UcMutex:
     return ucmutex_raw
 
-def assign_global_uc(uc: qemu.Uc) -> bool:
+def assign_global_uc(uc: qemu.Uc) -> None:
     global ucmutex_raw, g_uc_raw
+    
+    if not g_uc_raw:
+        g_uc_raw = uc
 
     if not ucmutex_raw:
-        g_uc_raw = uc
         ucmutex_raw = UcMutex(uc)
-        return True
-    else:
-        # We have no other choice for the logger. 
-        # Creating a variable would expose it to importers.
-        (GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
-        ).warning("ucmutex has already been defined! " +
-                       "You cannot reassign it!")
-    return False

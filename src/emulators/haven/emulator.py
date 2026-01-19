@@ -48,6 +48,7 @@ class Emulator:
 
         self.init_vtor_val = 0x0
         self.initialized = False
+        self.pc_logger = None
 
         # For the H1B3C, we're running a ARM Cortex-M3 chip, or at least that's
         # what's documented.
@@ -81,6 +82,14 @@ class Emulator:
         # We need to also capture invalid memory accesses. We should integrate
         # this with the M3 in the future. MemManage intr?
         g_uc().hook_add(UNICORN_MEM_INVALID_HOOKS, hooks.mem_invalid_access)
+
+        g_uc().hook_add(qemu.UC_HOOK_CODE, m3_emu.intr_op.m3_tick)
+
+        if GSCEMULATOR_PC_LOGGING_SETTINGS["log_pc"]:
+            self.pc_logger = open(
+                GSCEMULATOR_PC_LOGGING_SETTINGS["log_file_path"], "w"
+            )
+            g_uc().hook_add(qemu.UC_HOOK_CODE, hooks.pc_logger, self.pc_logger)
         
         # Call this after the emulator has finished initializing.
         self.initialized = True
@@ -126,3 +135,7 @@ class Emulator:
             current_pc = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC)
             prints.fatal(f"Exception occured at pc=0x{current_pc:x}:")
             traceback.print_exc()
+
+        if self.pc_logger:
+            self.pc_logger.flush()
+            self.pc_logger.close()

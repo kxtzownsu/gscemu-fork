@@ -27,6 +27,8 @@ class UartController:
 
         self.ctrl = 0
         self.nco = 0
+        self.fifo = 0
+        self.ictrl = 0
 
     def uart_worker(self):
         while True:
@@ -47,24 +49,6 @@ class UartController:
                 # the value, and execution can proceed.
                 self.opqueue.task_done()
 
-                # After every operation, we might need to also adjust other
-                # register values.
-
-                # UART_CTRL_TX
-                # 0 = disabled, 1 = enabled
-                if self.ctrl & 1: # BIT(0)
-                    # UART_STATE_TX
-                    # 0 = enabled, 1 = busy
-                    self.state &= ~1 # BIT(0)
-
-                    # UART_STATE_TX_EMPTY
-                    # 0 = not empty, 1 = empty
-                    self.state |= 16 # BIT(4)
-
-                    # UART_STATE_TX_IDLE
-                    # 0 = not idle, 1 = idle
-                    self.state |= 32 # BIT(5)
-
             except Exception as e:
                 prints.fatal(e)
 
@@ -83,6 +67,41 @@ class UartController:
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
+    def ctrl_process(self):
+        # UART_CTRL_TX
+        # 0 = disabled, 1 = enabled
+        if self.ctrl & 1: # BIT(0)
+            # UART_STATE_TX
+            # 0 = enabled, 1 = busy
+            self.state &= ~1 # BIT(0)
+
+            # UART_STATE_TX_EMPTY
+            # 0 = not empty, 1 = empty
+            self.state |= 16 # BIT(4)
+
+            # UART_STATE_TX_IDLE
+            # 0 = not idle, 1 = idle
+            self.state |= 32 # BIT(5)
+
+            self.ctrl &= ~1 # BIT(0)
+
+        # UART_CTRL_RX
+        # 0 = disabled, 1 = enabled
+        if self.ctrl & 2: # BIT(1)
+            # UART_STATE_RX
+            # 0 = enabled, 1 = busy
+            self.state &= ~2 # BIT(1)
+
+            # UART_STATE_RX_EMPTY
+            # 0 = not empty, 1 = empty
+            self.state |= 128 # BIT(7)
+
+            # UART_STATE_RX_IDLE
+            # 0 = not idle, 1 = idle
+            self.state |= 64 # BIT(6)
+
+            self.ctrl &= ~2 # BIT(0)
+
     def read_wdata(self, size: int, queue: queue.Queue) -> None:
         unhandled_register_io(prints, "READ", "UART0", "WDATA")
         queue.put(0)
@@ -95,7 +114,22 @@ class UartController:
             except:
                 pass
         else:
-            prints.warning("WDATA written to whilst STATE TX busy set!")
+            prints.warning("WDATA written to whilst STATE_TX set!")
+
+    def read_rdata(self, size: int, queue: queue.Queue) -> None:
+        if not (self.state & 2): # BIT(1)
+            try:
+                char = self.input_queue.get_nowait()
+            except queue.Empty:
+                prints.warning("RDATA read when no available chars!")
+                char = 0
+
+            queue.put(char)
+        else:
+            prints.warning("RDATA written to whilst STATE_RX set!")
+
+    def write_rdata(self, size: int, value: int) -> None:
+        unhandled_register_io(prints, "WRITE", "UART0", "RDATA")
 
     def read_nco(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.nco)
@@ -109,23 +143,26 @@ class UartController:
     def write_ctrl(self, size: int, value: int) -> None:
         self.ctrl = value
 
+        if self.ctrl:
+            self.ctrl_process()
+
     def read_state(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.state)
 
     def write_state(self, size: int, value: int) -> None:
         self.state = value
+        
+    def read_fifo(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.fifo)
 
-    def read_rdata(self, size: int, queue: queue.Queue) -> None:
-        try:
-            char = self.input_queue.get_nowait()
-        except queue.Empty:
-            prints.warning("RDATA read when no available chars!")
-            char = 0
+    def write_fifo(self, size: int, value: int) -> None:
+        self.fifo = value
 
-        queue.put(char)
+    def read_ictrl(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.ictrl)
 
-    def write_rdata(self, size: int, value: int) -> None:
-        unhandled_register_io(prints, "WRITE", "UART0", "RDATA")
+    def write_ictrl(self, size: int, value: int) -> None:
+        self.ictrl = value
 
 c_emu = UartController()
 c_emu.start_worker()
@@ -136,6 +173,8 @@ _REG_FUNC_MAP = {
     UART_REGS["CTRL"]: [c_emu.read_ctrl, c_emu.write_ctrl],
     UART_REGS["STATE"]: [c_emu.read_state, c_emu.write_state],
     UART_REGS["RDATA"]: [c_emu.read_rdata, c_emu.write_rdata],
+    UART_REGS["FIFO"]: [c_emu.read_fifo, c_emu.write_fifo],
+    UART_REGS["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl]
 }
 
 def component_read_handler(

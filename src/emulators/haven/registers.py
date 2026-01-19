@@ -47,6 +47,11 @@ REG_DEFS = {
         "size": DEFAULT_REG_WITDH,
     },
 
+    "RTC0": { # No
+        "base_addr": 0x400a0000,
+        "size": DEFAULT_REG_WITDH,
+    },
+
     "XO0": { # No
         "base_addr": 0x400b0000,
         "size": DEFAULT_REG_WITDH,
@@ -82,8 +87,8 @@ REG_DEFS = {
         "size": DEFAULT_REG_WITDH,
     },
 
-    "RTC0": { # No
-        "base_addr": 0x400a0000,
+    "TIMELS0": { # No
+        "base_addr": 0x40540000,
         "size": DEFAULT_REG_WITDH,
     },
 }
@@ -109,15 +114,15 @@ MMIO_REG_DEFS = {
         "size": DEFAULT_REG_WITDH
     },
 
-    # "UART1": { # Yes
-    #     "base_addr": 0x40610000,
-    #     "size": DEFAULT_REG_WITDH
-    # },
+    "UART1": { # Yes
+        "base_addr": 0x40610000,
+        "size": DEFAULT_REG_WITDH
+    },
 
-    # "UART2": { # Yes
-    #     "base_addr": 0x40620000,
-    #     "size": DEFAULT_REG_WITDH
-    # },
+    "UART2": { # Yes
+        "base_addr": 0x40620000,
+        "size": DEFAULT_REG_WITDH
+    },
 
     "FLASH0": { # Yes
         "base_addr": 0x40720000,
@@ -263,6 +268,14 @@ M3_REGS = {
     "CPUID": 0xed00,
     "ITCMCR": 0xef90,
     "DWT_CYCCNT": 0x1004,
+    "CCR": 0xed14,
+    "SHSCR": 0xed24,
+
+    "NVIC_ISER": _reg_list(0xe100, 8),
+    "NVIC_ICER": _reg_list(0xe180, 8),
+    "NVIC_ICPR": _reg_list(0xe280, 8),
+    "NVIC_IPR": _reg_list(0xe400, 64),
+    "NVIC_STIR": 0xef00,
 }
 
 KEYMGR_REGS = {

@@ -8,6 +8,7 @@ hook functions, since they shouldn't be a part of the class that is exposed
 to the user. We could make a seperate class in the future instead?
 """
 
+import typing
 import unicorn as qemu
 
 from lib.globalvars import *
@@ -32,7 +33,17 @@ def mem_invalid_access(
         qemu.UC_MEM_FETCH_UNMAPPED: "FETCH",
     }
 
-    prints.warning(
+    prints.fatal(
         f"Invalid memory {kind[access]} " + 
-        f"with address=0x{address:08x}, size={size}")
+        f"with address=0x{address:08x}, size={size}"
+    )
+    
     return False
+
+def pc_logger(
+    uc: qemu.Uc,
+    address: int,
+    size: int,
+    user_data: typing.TextIO,
+) -> bool:
+    user_data.write(f"{hex(address)}\n")
