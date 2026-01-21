@@ -86,8 +86,10 @@ def idx_regs_to_regmap(
         ]
 
 def halt_emulation():
-    g_uc().emu_stop()
+    # PC sync is not guaranteed here, so the caller needs to manage this
+    # properly if we use this.
     prints.debug(
         "Emulation forcefully halted at " +
         f"pc=0x{g_uc().reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
     )
+    ucthread().emu_halt()

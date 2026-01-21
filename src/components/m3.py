@@ -67,37 +67,33 @@ class ArmInterruptHandler:
                 # Process the interrupt op
                 target_fn(*args)
 
-                # For write operations, this doesn't do anything. For read
-                # operations, we need to tell the handler that we have processed
-                # the value, and execution can proceed.
-                self.intr_queue.task_done()
-
                 # After processing the interrupt op, we need to check if we have
                 # any pending interrupts that can be activated.
                 pending_exceptions = {}
                 self.check_for_pending_exceptions(pending_exceptions)
 
                 if not pending_exceptions:
+                    self.intr_queue.task_done()
                     continue
 
                 # There are exceptions pending. Check if we should branch to any
                 # of them.
-                self.winning_exception = (
+                winning_exception = (
                     self.should_trigger_exception(pending_exceptions)
                 )
 
+                if winning_exception == -1:
+                    self.intr_queue.task_done()
+                    continue
+            
+                # If we are still here, it means we need to branch to
+                # winning_exc exception.
+                self.branch_to_exception(winning_exception)
+
+                self.intr_queue.task_done()
+
             except Exception as e:
                 prints.fatal(e)
-
-    def m3_tick(self, uc, address, size, user_data):
-        # Check if any exceptions are pending.
-        with self.winning_exception_lock:
-            if self.winning_exception == -1:
-                return
-        
-            # If we are still here, it means we need to branch to
-            # winning_exc exception.
-            self.branch_to_exception(self.winning_exception)
 
     def start_intr_worker(self) -> None:
         self.intr_thread = threading.Thread(target=self.m3_intr_worker)
@@ -112,6 +108,7 @@ class ArmInterruptHandler:
         
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.intr_queue.put([target_fn, (size, value)])
+        self.intr_queue.join()
 
     def check_for_pending_exceptions(self, pending_exceptions: dict) -> None:
         # Populate pending_exceptions with pending exceptions.

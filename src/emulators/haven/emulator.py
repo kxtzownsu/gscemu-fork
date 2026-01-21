@@ -83,8 +83,6 @@ class Emulator:
         # this with the M3 in the future. MemManage intr?
         g_uc().hook_add(UNICORN_MEM_INVALID_HOOKS, hooks.mem_invalid_access)
 
-        g_uc().hook_add(qemu.UC_HOOK_CODE, m3_emu.intr_op.m3_tick)
-
         if GSCEMULATOR_PC_LOGGING_SETTINGS["log_pc"]:
             self.pc_logger = open(
                 GSCEMULATOR_PC_LOGGING_SETTINGS["log_file_path"], "w"
@@ -129,12 +127,7 @@ class Emulator:
         # Start the CYCCNT timer to count how many cycles have elapsed.
         m3_emu.start_cyccnt_time()
 
-        try:
-            g_uc().emu_start(entry_pc, 0xFFFFFFFF)
-        except Exception as e:
-            current_pc = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC)
-            prints.fatal(f"Exception occured at pc=0x{current_pc:x}:")
-            traceback.print_exc()
+        ucthread().emu_start()
 
         if self.pc_logger:
             self.pc_logger.flush()

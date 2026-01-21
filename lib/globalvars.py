@@ -3,6 +3,7 @@
 
 import unicorn as qemu
 
+from lib.ucthread import UcThread
 from lib.threadutils import UcMutex
 from env import GSCEMULATOR_LOGGER_SETTINGS
 from lib.logger import GscemuLogger
@@ -26,17 +27,25 @@ ucmutex_raw = None
 # through hooks and so on.
 g_uc_raw = None
 
+ucthread_raw = None
+
 def g_uc() -> qemu.Uc:
     return g_uc_raw
 
 def ucmutex() -> UcMutex:
     return ucmutex_raw
 
+def ucthread() -> UcThread:
+    return ucthread_raw
+
 def assign_global_uc(uc: qemu.Uc) -> None:
-    global ucmutex_raw, g_uc_raw
+    global ucmutex_raw, g_uc_raw, ucthread_raw
     
     if not g_uc_raw:
         g_uc_raw = uc
 
     if not ucmutex_raw:
         ucmutex_raw = UcMutex(uc)
+
+    if not ucthread_raw:
+        ucthread_raw = UcThread(uc)
