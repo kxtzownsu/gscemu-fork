@@ -3,19 +3,27 @@
 
 import inspect
 import typing
+import unicorn as qemu
+from lib.ucthread import UcThread
+from lib.threadutils import UcMutex
+from env import *
 
-from lib.globalvars import *
 from lib.logger import GscemuLogger
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 def unhandled_register_exit(
+    uc: qemu.Uc,
+    ucthread: UcThread,
     logger: GscemuLogger, 
     component: str, 
     address: int
 ) -> None:
-    logger.fatal(f"Unhandled register 0x{address:x} in component {component}!")
-    halt_emulation()
+    logger.fatal(
+        f"Unhandled register 0x{address:x} in component {component} at " +
+        f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
+    )
+    halt_emulation(uc, ucthread)
 
 def unhandled_register_io(
     logger: GscemuLogger, 
@@ -85,11 +93,48 @@ def idx_regs_to_regmap(
             args_lambda_gen(write_fn, idx)
         ]
 
-def halt_emulation():
+def armv7m_find_instruction_size(
+    ucmutex: UcMutex, 
+    address: int
+):
+    """Find the instruction length of an instruction from it's address.
+    
+    Based on the armv7m Cortex-M3 spec, we are using Thumb-2. Therefore, 
+    we can determine a 2 or 4 byte instruction by looking at the first 2 bytes
+    of an instruction. If bytes [15:11] are more than 0x1d, it's a 4 byte
+    instruction.
+    """
+    if ((ucmutex.int16_mem_read(address) >> 11) & 0x1f) >= 0x1d:
+        return 4
+    else:
+        return 2
+
+def write_u32_to_sp(
+    ucmutex: UcMutex, 
+    val: int
+):
+    new_sp = ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_SP) - 4
+    ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_SP, new_sp)
+
+    ucmutex.mem_write(new_sp, val.to_bytes(4, 'little'))
+
+def read_u32_from_sp(
+    ucmutex: UcMutex, 
+    sp_type: int
+):
+    sp = ucmutex.reg_read(sp_type)
+    val = ucmutex.int32_mem_read(sp)
+    ucmutex.reg_write(sp_type, sp + 4)
+    return val
+
+def halt_emulation(
+    uc: qemu.Uc,
+    ucthread: UcThread,
+) -> None:
     # PC sync is not guaranteed here, so the caller needs to manage this
     # properly if we use this.
     prints.debug(
         "Emulation forcefully halted at " +
-        f"pc=0x{g_uc().reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
+        f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
     )
-    ucthread().emu_halt()
+    ucthread.emu_halt()

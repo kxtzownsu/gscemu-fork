@@ -22,12 +22,16 @@ from lib.helpers import (
     unhandled_register_io, 
     unhandled_register_exit,
     idx_regs_to_regmap,
-    args_lambda_gen
+    args_lambda_gen,
+    armv7m_find_instruction_size,
+    write_u32_to_sp,
+    read_u32_from_sp,
 )
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 _CYCCNT_SPEED = (1/24000000) * 1000000000
+_EXC_RETURN_VALS = [0xFFFFFFF0, 0xFFFFFFF2, 0xFFFFFFF4]
 
 class ArmInterruptHandler:
     def __init__(self, arm_cpu):
@@ -59,10 +63,17 @@ class ArmInterruptHandler:
         self.winning_exception_lock = threading.Lock()
         self.winning_exception = 0
 
+        # We need this variable to track if the interrupt was software or
+        # "hardware" triggered, so that we can safely branch to
+        # exceptions. This variable should only be read in the
+        # branch_to_exception function, and nowhere else.
+        self.internal_exception_trig = False
+
     def m3_intr_worker(self):
         while True:
             try:
-                target_fn, args = self.intr_queue.get()
+                target_fn, internal_trig, args = self.intr_queue.get()
+                self.internal_exception_trig = internal_trig
 
                 # Process the interrupt op
                 target_fn(*args)
@@ -100,15 +111,42 @@ class ArmInterruptHandler:
         self.intr_thread.daemon = True
         self.intr_thread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_internal_read_worker_op(self, size: int, target_fn):
         retqueue = queue.Queue()
-        self.intr_queue.put([target_fn, (size, retqueue)])
+        self.intr_queue.put([target_fn, True, (size, retqueue)])
         self.intr_queue.join()
         return retqueue.get_nowait()
         
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
-        self.intr_queue.put([target_fn, (size, value)])
+    def queue_internal_write_worker_op(self, size: int, value: int, target_fn):
+        self.intr_queue.put([target_fn, True, (size, value)])
         self.intr_queue.join()
+
+    def queue_exc_return(self):
+        self.intr_queue.put([self.exc_return_callback, False, tuple()])
+        self.intr_queue.join()
+
+    def exc_return_callback(self) -> None:
+        address = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC)
+        if address == _EXC_RETURN_VALS[0] or address == _EXC_RETURN_VALS[1]:
+            sp_type = qemu.arm_const.UC_ARM_REG_MSP
+        elif address == _EXC_RETURN_VALS[2]:
+            sp_type = qemu.arm_const.UC_ARM_REG_PSP
+
+        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_IPSR) != 2:
+            ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_FAULTMASK, 0)
+
+        for reg in reversed([
+            qemu.arm_const.UC_ARM_REG_XPSR,
+            qemu.arm_const.UC_ARM_REG_PC,
+            qemu.arm_const.UC_ARM_REG_LR,
+            qemu.arm_const.UC_ARM_REG_R12,
+            qemu.arm_const.UC_ARM_REG_R3,
+            qemu.arm_const.UC_ARM_REG_R2,
+            qemu.arm_const.UC_ARM_REG_R1,
+            qemu.arm_const.UC_ARM_REG_R0,
+        ]):
+            reg_val = read_u32_from_sp(ucmutex(), sp_type)
+            ucmutex().reg_write(reg, reg_val)
 
     def check_for_pending_exceptions(self, pending_exceptions: dict) -> None:
         # Populate pending_exceptions with pending exceptions.
@@ -168,7 +206,90 @@ class ArmInterruptHandler:
         return winning_exc_num
     
     def branch_to_exception(self, exception_num: int) -> None:
-        pass
+        ret_pc = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC)
+
+        # On an internal exception trigger, we need to advance the PC. The write
+        # has been completed, but the PC has not been advanced yet.
+        # On an external exception trigger, we don't have to advance the PC.
+        # The emulator already steps the PC without executing the next inst.
+        # On an EXC_RETURN callback, we will just 
+        # self.internal_exception_trig = False, because the PC has already been
+        # advanced.
+        if self.internal_exception_trig:
+            ret_pc += armv7m_find_instruction_size(ucmutex(), ret_pc)
+
+        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_PC, ret_pc|1)
+
+        current_mode = None
+        current_sp = None
+        built_exc_return = None
+        if ucmutex().reg_read(
+            qemu.arm_const.UC_ARM_REG_CONTROL
+        ) & 2: # thread = psp, handler = msp
+            if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_IPSR): # handler
+                current_mode = "handler"
+                current_sp = "msp"
+            else: # thread
+                current_mode = "thread"
+                current_sp = "psp"
+        else: # thread = msp, handler = msp
+            if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_IPSR): # handler
+                current_mode = "handler"
+            else: # thread
+                current_mode = "thread"
+            current_sp = "msp"
+
+        # EXC_RETURN value determination
+        if current_mode == "thread":
+            if current_sp == "msp":
+                built_exc_return = _EXC_RETURN_VALS[1]
+            elif current_sp == "psp":
+                built_exc_return = _EXC_RETURN_VALS[2]
+        elif current_mode == "handler":
+            if current_sp == "msp":
+                built_exc_return = _EXC_RETURN_VALS[0]
+            elif current_sp == "psp":
+                prints.fatal_exit(
+                    "impossible handler+psp case for EXC_RETURN!!!"
+                )
+
+        # push exception frame to the stack
+        for reg in [qemu.arm_const.UC_ARM_REG_XPSR,
+                    qemu.arm_const.UC_ARM_REG_PC,
+                    qemu.arm_const.UC_ARM_REG_LR,
+                    qemu.arm_const.UC_ARM_REG_R12,
+                    qemu.arm_const.UC_ARM_REG_R3,
+                    qemu.arm_const.UC_ARM_REG_R2,
+                    qemu.arm_const.UC_ARM_REG_R1,
+                    qemu.arm_const.UC_ARM_REG_R0]:
+            reg_val = ucmutex().reg_read(reg)
+            if reg == qemu.arm_const.UC_ARM_REG_PC:
+                reg_val |= 1
+            write_u32_to_sp(ucmutex(), reg_val)
+        
+        # place EXC_RETURN val and enter handler mode
+        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_LR, built_exc_return|1)
+        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_IPSR, exception_num)
+
+        # IT state is cleared, as documented in the ARM psuedocode
+        # EPSR.IT<7:0> = Zeros(8);
+        ucmutex().reg_write(
+            qemu.arm_const.UC_ARM_REG_EPSR, 
+            ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_EPSR) & ~0x600fc00
+        )
+
+        # Generate the handler's PC based on the VTOR address
+        exception_pc = ucmutex().int32_mem_read(
+            self.cpu.vtor + exception_num * 4
+        )
+
+        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_PC, exception_pc)
+
+        if exception_num >= 16:
+            with self.nvic_pend_lock:
+                self.nvic_pend[exception_num - 16] = False
+        elif exception_num < 16:
+            self.nvic_sys_pend[exception_num - 1] = False
         
     def read_iser(self, size: int, queue: queue.Queue, index: int) -> None:
         value = 0
@@ -375,9 +496,12 @@ idx_regs_to_regmap(
 
 for k, v in _INTR_FUNC_MAP.items():
     _REG_FUNC_MAP[k] = [
-        args_lambda_gen(c_emu.intr_op.queue_read_worker_op, v[0]), 
-        args_lambda_gen(c_emu.intr_op.queue_write_worker_op, v[1])
+        args_lambda_gen(c_emu.intr_op.queue_internal_read_worker_op, v[0]), 
+        args_lambda_gen(c_emu.intr_op.queue_internal_write_worker_op, v[1])
     ]
+
+def exc_return_handler() -> None:
+    c_emu.intr_op.queue_exc_return()
 
 def component_read_handler(
     uc: qemu.Uc,
@@ -388,7 +512,7 @@ def component_read_handler(
     try:
         return _REG_FUNC_MAP[offset][0](size)
     except KeyError:
-        unhandled_register_exit(prints, "M3", offset)
+        unhandled_register_exit(g_uc(), ucthread(), prints, "M3", offset)
 
 def component_write_handler(
     uc: qemu.Uc,
@@ -400,4 +524,4 @@ def component_write_handler(
     try:
         _REG_FUNC_MAP[offset][1](size, value)
     except KeyError:
-        unhandled_register_exit(prints, "M3", offset)
+        unhandled_register_exit(g_uc(), ucthread(), prints, "M3", offset)

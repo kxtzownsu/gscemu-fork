@@ -16,6 +16,11 @@ The H1B3C's CPU runs off the Cortex-M3 armv7m spec.
 # matter as much in this part of the code. We will try to increase debugability
 # as much as possible and not consider extra initialization time as wasted time.
 
+# For unicorn debug builds to analyze the TCG logs.
+# import os
+# os.environ['UNICORN_LOG_LEVEL'] = "0xFFFFFFFF"
+# os.environ['UNICORN_LOG_DETAIL_LEVEL'] = "1"
+
 import traceback
 import unicorn as qemu
 
@@ -54,7 +59,7 @@ class Emulator:
         # what's documented.
         self.uc = qemu.Uc(
             qemu.UC_ARCH_ARM,
-            qemu.UC_MODE_THUMB,
+            qemu.UC_MODE_THUMB | qemu.UC_MODE_MCLASS,
             qemu.arm_const.UC_CPU_ARM_CORTEX_M3
         )
         
@@ -78,6 +83,8 @@ class Emulator:
         ):
             prints.fatal("Failed to load firmware during init process.")
             return
+        
+        g_uc().hook_add(qemu.UC_HOOK_INTR, hooks.intr_hook)
         
         # We need to also capture invalid memory accesses. We should integrate
         # this with the M3 in the future. MemManage intr?
@@ -128,7 +135,3 @@ class Emulator:
         m3_emu.start_cyccnt_time()
 
         ucthread().emu_start()
-
-        if self.pc_logger:
-            self.pc_logger.flush()
-            self.pc_logger.close()

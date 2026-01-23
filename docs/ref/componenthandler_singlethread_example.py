@@ -43,7 +43,7 @@ def component_read_handler(
     try:
         return _REG_FUNC_MAP[offset][0](size)
     except KeyError:
-        unhandled_register_exit(prints, "XX", offset)
+        unhandled_register_exit(g_uc(), ucthread(), prints, "XX", offset)
 
 def component_write_handler(
     uc: qemu.Uc,
@@ -55,4 +55,4 @@ def component_write_handler(
     try:
         _REG_FUNC_MAP[offset][1](size, value)
     except KeyError:
-        unhandled_register_exit(prints, "XX", offset)
+        unhandled_register_exit(g_uc(), ucthread(), prints, "XX", offset)

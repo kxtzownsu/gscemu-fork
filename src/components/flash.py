@@ -367,7 +367,7 @@ def component_read_handler(
     try:
         return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
     except KeyError:
-        unhandled_register_exit(prints, "FLASH0", offset)
+        unhandled_register_exit(g_uc(), ucthread(), prints, "FLASH0", offset)
 
 def component_write_handler(
     uc: qemu.Uc,
@@ -379,4 +379,4 @@ def component_write_handler(
     try:
         c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
     except KeyError:
-        unhandled_register_exit(prints, "FLASH0", offset)
+        unhandled_register_exit(g_uc(), ucthread(), prints, "FLASH0", offset)

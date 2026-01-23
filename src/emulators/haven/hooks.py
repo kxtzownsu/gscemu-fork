@@ -16,6 +16,8 @@ from env import *
 from lib.logger import GscemuLogger
 from .registers import REG_DEFS
 
+from src.components.m3 import exc_return_handler
+
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 # TODO(appleflyer): hook up with M3 component in the future for interrupts.
@@ -40,6 +42,17 @@ def mem_invalid_access(
     
     return False
 
+def intr_hook(
+    uc: qemu.Uc,
+    intno: int, 
+    user_data: typing.Any,
+):
+    match intno:
+        case 8: # EXCP_EXCEPTION_EXIT
+            exc_return_handler()
+            
+    return True
+
 def pc_logger(
     uc: qemu.Uc,
     address: int,
@@ -47,3 +60,11 @@ def pc_logger(
     user_data: typing.TextIO,
 ) -> bool:
     user_data.write(f"{hex(address)}\n")
+
+def blank_tick_hook(
+    uc: qemu.Uc,
+    address: int,
+    size: int,
+    user_data: typing.TextIO, 
+) -> bool:
+    return True

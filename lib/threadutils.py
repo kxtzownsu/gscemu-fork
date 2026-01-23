@@ -80,4 +80,7 @@ class UcMutex:
     def int32_mem_write(self, address, val):
         with self.mutex:
             return self.uc.mem_write(address, int.to_bytes(val, 4, 'little'))
-
+        
+    def int16_mem_read(self, address):
+        with self.mutex:
+            return int.from_bytes(self.uc.mem_read(address, 2), 'little')

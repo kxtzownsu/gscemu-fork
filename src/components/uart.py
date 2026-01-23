@@ -83,8 +83,6 @@ class UartController:
             # 0 = not idle, 1 = idle
             self.state |= 32 # BIT(5)
 
-            self.ctrl &= ~1 # BIT(0)
-
         # UART_CTRL_RX
         # 0 = disabled, 1 = enabled
         if self.ctrl & 2: # BIT(1)
@@ -99,8 +97,6 @@ class UartController:
             # UART_STATE_RX_IDLE
             # 0 = not idle, 1 = idle
             self.state |= 64 # BIT(6)
-
-            self.ctrl &= ~2 # BIT(0)
 
     def read_wdata(self, size: int, queue: queue.Queue) -> None:
         unhandled_register_io(prints, "READ", "UART0", "WDATA")
@@ -164,6 +160,13 @@ class UartController:
     def write_ictrl(self, size: int, value: int) -> None:
         self.ictrl = value
 
+    def read_istateclr(self, size: int, queue: queue.Queue) -> None:
+        unhandled_register_io(prints, "READ", "UART0", "ISTATECLR")
+        queue.put(0)
+
+    def write_istateclr(self, size: int, value: int) -> None:
+        pass
+
 c_emu = UartController()
 c_emu.start_worker()
 
@@ -174,7 +177,8 @@ _REG_FUNC_MAP = {
     UART_REGS["STATE"]: [c_emu.read_state, c_emu.write_state],
     UART_REGS["RDATA"]: [c_emu.read_rdata, c_emu.write_rdata],
     UART_REGS["FIFO"]: [c_emu.read_fifo, c_emu.write_fifo],
-    UART_REGS["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl]
+    UART_REGS["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl],
+    UART_REGS["ISTATECLR"]: [c_emu.read_istateclr, c_emu.write_istateclr],
 }
 
 def component_read_handler(
@@ -186,7 +190,7 @@ def component_read_handler(
     try:
         return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
     except KeyError:
-        unhandled_register_exit(prints, "UART0", offset)
+        unhandled_register_exit(g_uc(), ucthread(), prints, "UART0", offset)
 
 def component_write_handler(
     uc: qemu.Uc,
@@ -198,4 +202,4 @@ def component_write_handler(
     try:
         c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
     except KeyError:
-        unhandled_register_exit(prints, "UART0", offset)
+        unhandled_register_exit(g_uc(), ucthread(), prints, "UART0", offset)
