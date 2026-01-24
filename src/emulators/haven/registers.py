@@ -39,100 +39,105 @@ REG_DEFS = {
 
     "PMU": { # No
         "base_addr": 0x40000000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "PINMUX": { # No
         "base_addr": 0x40060000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "RTC0": { # No
         "base_addr": 0x400a0000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "XO0": { # No
         "base_addr": 0x400b0000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "GPIO0": { # No
         "base_addr": 0x40200000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "GPIO1": { # No
         "base_addr": 0x40210000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "USB0": { # No
         "base_addr": 0x40300000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "TRNG0": { # No
         "base_addr": 0x40410000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "CRYPTO0": { # No
         "base_addr": 0x40420000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "WATCHDOG0": { # No
+        "base_addr": 0x40500000,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "SWDP0": { # No
         "base_addr": 0x40520000,
-        "size": DEFAULT_REG_WITDH,
-    },
-
-    "TIMELS0": { # No
-        "base_addr": 0x40540000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 }
 
 MMIO_REG_DEFS = {
     "GLOBALSEC": { # Yes
         "base_addr": 0x40090000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "FUSE0": { # Yes
         "base_addr": 0x40450000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
-    "KEYMGR0": { # No
+    "TIMELS0": { # Yes
+        "base_addr": 0x40540000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "KEYMGR0": { # Yes
         "base_addr": 0x40570000,
-        "size": DEFAULT_REG_WITDH,
+        "size": DEFAULT_REG_WIDTH,
     },
 
     "UART0": { # Yes
         "base_addr": 0x40600000,
-        "size": DEFAULT_REG_WITDH
+        "size": DEFAULT_REG_WIDTH
     },
 
     "UART1": { # Yes
         "base_addr": 0x40610000,
-        "size": DEFAULT_REG_WITDH
+        "size": DEFAULT_REG_WIDTH
     },
 
     "UART2": { # Yes
         "base_addr": 0x40620000,
-        "size": DEFAULT_REG_WITDH
+        "size": DEFAULT_REG_WIDTH
     },
 
     "FLASH0": { # Yes
         "base_addr": 0x40720000,
-        "size": DEFAULT_REG_WITDH
+        "size": DEFAULT_REG_WIDTH
     },
 
     "M3": { # Yes
         "base_addr": 0xe0000000,
-        "size": DEFAULT_REG_WITDH,
-    }
+        "size": DEFAULT_REG_WIDTH,
+    },
 }
 
 UART_REGS = {
@@ -326,4 +331,22 @@ FLASH_REGS = {
 
     "DOUT_VAL0": 0x3c,
     "DOUT_VAL1": 0x40,
+}
+
+TIMELS_REGS = {
+    "TIMER": {
+        "CONTROL": 0x0,
+        "STATUS": 0x4,
+        "LOAD": 0x8,
+        "RELOADVAL": 0xc,
+        "VALUE": 0x10,
+        "STEP": 0x14,
+        "IER": 0x18,
+        "ISR": 0x1c,
+        "IPR": 0x20,
+        "IAR": 0x24,
+        "WAKEUP_ACK": 0x28,
+    },
+    "TIMER0_BASE": 0x0,
+    "TIMER1_BASE": 0x40,
 }

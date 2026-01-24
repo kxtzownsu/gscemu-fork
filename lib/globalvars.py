@@ -9,7 +9,7 @@ from env import GSCEMULATOR_LOGGER_SETTINGS
 from lib.logger import GscemuLogger
 
 THUMB_BIT = 1
-DEFAULT_REG_WITDH = 0x10000 # Standard across all GSC variants
+DEFAULT_REG_WIDTH = 0x10000 # Standard across all GSC variants
 
 UNICORN_MEM_INVALID_HOOKS = (qemu.UC_HOOK_MEM_READ_UNMAPPED |
                              qemu.UC_HOOK_MEM_WRITE_UNMAPPED |

@@ -47,13 +47,13 @@ class ArmInterruptHandler:
         self.nvic_pri = [0] * (32 * 8) # IPR
 
         # Store system exception pends in a seperate dictionary.
-        self.nvic_sys_pend = [0] * 16
+        self.nvic_sys_pend = [0] * 15
         self.nvic_sys_pri = [
             # Fixed priority levels
             -3, # Reset
             -2, # NMI
             -1, # HardFault
-        ] + ([0] * (13))
+        ] + ([0] * (12))
 
         # TODO(appleflyer): We need a way to send a signal when these values 
         # change. Polling the values with UC_HOOK_CODE is too slow.
@@ -67,13 +67,13 @@ class ArmInterruptHandler:
         # "hardware" triggered, so that we can safely branch to
         # exceptions. This variable should only be read in the
         # branch_to_exception function, and nowhere else.
-        self.internal_exception_trig = False
+        self.is_internal_ib_context = False
 
     def m3_intr_worker(self):
         while True:
             try:
-                target_fn, internal_trig, args = self.intr_queue.get()
-                self.internal_exception_trig = internal_trig
+                target_fn, internal_ib_ctx, args = self.intr_queue.get()
+                self.is_internal_ib_context = internal_ib_ctx
 
                 # Process the interrupt op
                 target_fn(*args)
@@ -111,19 +111,42 @@ class ArmInterruptHandler:
         self.intr_thread.daemon = True
         self.intr_thread.start()
 
-    def queue_internal_read_worker_op(self, size: int, target_fn):
+    def queue_internal_read_worker_op(
+        self, 
+        size: int, 
+        target_fn: typing.Callable
+    ) -> None:
         retqueue = queue.Queue()
         self.intr_queue.put([target_fn, True, (size, retqueue)])
         self.intr_queue.join()
         return retqueue.get_nowait()
         
-    def queue_internal_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_internal_write_worker_op(
+        self, 
+        size: int, 
+        value: int, 
+        target_fn: typing.Callable
+    ):
         self.intr_queue.put([target_fn, True, (size, value)])
         self.intr_queue.join()
 
-    def queue_exc_return(self):
+    def queue_exc_return(self) -> None:
         self.intr_queue.put([self.exc_return_callback, False, tuple()])
         self.intr_queue.join()
+
+    def queue_external_irq(self, irq) -> None:
+        self.intr_queue.put([self.pend_external_irq, True, (irq,)])
+        self.intr_queue.join()
+
+    def pend_external_irq(self, irq) -> None:
+        self.nvic_pend[irq] = True
+
+    def queue_svcall_interrupt(self) -> None:
+        self.intr_queue.put([self.pend_svcall_interrupt, False, tuple()])
+        self.intr_queue.join()
+
+    def pend_svcall_interrupt(self) -> None:
+        self.nvic_sys_pend[9 + 1] = True
 
     def exc_return_callback(self) -> None:
         address = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC)
@@ -151,29 +174,41 @@ class ArmInterruptHandler:
     def check_for_pending_exceptions(self, pending_exceptions: dict) -> None:
         # Populate pending_exceptions with pending exceptions.
         # exception_num: priority
-        
-        # PRIMASK disables IRQs
-        if not self.faultmask:
-            if not self.primask:
-                with self.nvic_pend_lock:
-                    for irq in range(len(self.nvic_pend)):
-                        if not self.nvic_pend[irq]:
-                            continue
-                        if not self.nvic_en[irq]:
-                            continue
-                        pending_exceptions[irq + 16] = (
-                            self.nvic_pri[irq]
-                        )
-                
-                for exc in range(len(self.nvic_sys_pend)):
-                    if not self.nvic_sys_pend[exc]:
-                        continue
-                    pending_exceptions[exc] = self.nvic_sys_pri[exc]
 
-        # FAULTMASK is set, all exceptions disabled NMI.
-        else:
-            if self.nvic_sys_pend[2]:
-                pending_exceptions[2] = self.nvic_sys_pri[2]
+        # Always check NMI/Reset, they can never be blocked.
+
+        # Reset
+        if self.nvic_sys_pend[0]:
+            pending_exceptions[0] = self.nvic_sys_pri[0]
+
+        # NMI
+        if self.nvic_sys_pend[1]:
+            pending_exceptions[1] = self.nvic_sys_pri[1]
+
+        # FAULTMASK is set, all exceptions disabled NMI and Reset.
+        if self.faultmask:
+            return
+        
+        # HardFault
+        if self.nvic_sys_pend[2]:
+            pending_exceptions[2] = self.nvic_sys_pri[2]
+        
+        # PRIMASK is set, only allow Reset/NMI/HardFault.
+        if self.primask:
+            return
+        
+        for exc in range(len(self.nvic_sys_pend)):
+            if not self.nvic_sys_pend[exc]:
+                continue
+            pending_exceptions[exc + 1] = self.nvic_sys_pri[exc]
+            
+        with self.nvic_pend_lock:
+            for irq in range(len(self.nvic_pend)):
+                if not self.nvic_pend[irq]:
+                    continue
+                if not self.nvic_en[irq]:
+                    continue
+                pending_exceptions[irq + 15 + 1] = self.nvic_pri[irq]
 
     def should_trigger_exception(self, pending_exceptions: dict) -> int:
         # First, find a winning exception out of all the pending
@@ -192,34 +227,75 @@ class ArmInterruptHandler:
             
         if current_exc_num:
             # We are in an exception. Check it's priority level.
-            if current_exc_num >= 16:
-                current_exc_priority = self.nvic_pri[current_exc_num - 16]
+            if current_exc_num >= 15:
+                current_exc_priority = self.nvic_pri[current_exc_num - 15 - 1]
             else:
-                current_exc_priority = self.nvic_sys_pri[current_exc_num]
+                current_exc_priority = self.nvic_sys_pri[current_exc_num - 1]
             
             if winning_exc_pri >= current_exc_priority:
                 # The current winning exception priority isn't low enough. Do
                 # not trigger another stacked exception.
                 return -1
             
-        # We aren't in an exception.
+        # We aren't in an exception, or the new exception won.
         return winning_exc_num
     
     def branch_to_exception(self, exception_num: int) -> None:
+        # We now have to branch to an exception handler.
+        #
+        # Within unicorn, we need to handle interrupts a little differently.
+        # We use a queue context to check if we need to branch to an interrupt
+        # for every M3 operation that may change a condition that allows
+        # interrupting. This allows us to have extremely fast execution speed
+        # as we do not need to check for a pending interrupt every instruction,
+        # which detrimentally affects execution, expecially within Python.
+        #
+        # Therefore, we have 2 interrupt branching contexts. 
+        # 
+        # External IB Context:
+        # If the last operation to change a condition within the M3 was 
+        # from an externally triggered function, which is to say running 
+        # pend_external_irq in a seperate thread, then that means the emulator 
+        # is still running and is continuously executing code. We need to use a 
+        # uc_emu_stop signal to tell the emulator on the next TB to pause 
+        # emulation. Once the emulator has stopped, the PC would be in a state 
+        # where it points to the next instruction, but hasn't executed that 
+        # instruction yet. In this state, we are now able to modify emulator
+        # state to handle an interrupt and save the exception frame to the
+        # stack.
+        #
+        # Internal IB Context:
+        # If the last operation to change a condition within the M3 was from an
+        # internally triggered function, which is to say writing to the STIR
+        # register, then the emulator has already stopped running. We can just
+        # modify emulator state directly. The issue is that the PC has not been
+        # advanced yet. Therefore, from our current PC, we need to calculate our
+        # current instruction's PC, then advance the PC past it. After which, we
+        # are able to modify emulator state easily to handle an exception and
+        # save our exception frame to the stack.
+        #
+        # Regarding emu_stop/emu_start:
+        # I'm not really sure what happens when you run uc_emu_stop and
+        # uc_emu_start whilst you're in a hook. If everything is handled
+        # properly by unicorn, everything should work fine. To be safe, reduce
+        # this to only when we're calling from an external IB context, because
+        # that's realistically the only time we need it anyways.
+
+        # Stop the emulator on the next TB. This only applies if we aren't
+        # running in the mmio callback.
+        if not self.is_internal_ib_context:
+            ucthread().emu_pause()
+
         ret_pc = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC)
 
-        # On an internal exception trigger, we need to advance the PC. The write
-        # has been completed, but the PC has not been advanced yet.
-        # On an external exception trigger, we don't have to advance the PC.
-        # The emulator already steps the PC without executing the next inst.
-        # On an EXC_RETURN callback, we will just 
-        # self.internal_exception_trig = False, because the PC has already been
-        # advanced.
-        if self.internal_exception_trig:
+        # Since our PC hasn't been advanced yet in the mmio_map write callback,
+        # we need to advance it ourselves.
+        if self.is_internal_ib_context:
             ret_pc += armv7m_find_instruction_size(ucmutex(), ret_pc)
 
-        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_PC, ret_pc|1)
+        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_PC, ret_pc | 1)
 
+        # Build the EXC_RETURN value based on IPSR and current SP.
         current_mode = None
         current_sp = None
         built_exc_return = None
@@ -253,7 +329,7 @@ class ArmInterruptHandler:
                     "impossible handler+psp case for EXC_RETURN!!!"
                 )
 
-        # push exception frame to the stack
+        # Push the exception frame to the stack
         for reg in [qemu.arm_const.UC_ARM_REG_XPSR,
                     qemu.arm_const.UC_ARM_REG_PC,
                     qemu.arm_const.UC_ARM_REG_LR,
@@ -267,7 +343,7 @@ class ArmInterruptHandler:
                 reg_val |= 1
             write_u32_to_sp(ucmutex(), reg_val)
         
-        # place EXC_RETURN val and enter handler mode
+        # Place EXC_RETURN val into LR and enter handler mode by changing IPSR.
         ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_LR, built_exc_return|1)
         ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_IPSR, exception_num)
 
@@ -279,17 +355,23 @@ class ArmInterruptHandler:
         )
 
         # Generate the handler's PC based on the VTOR address
+        # VTOR addr + Exception * 4
         exception_pc = ucmutex().int32_mem_read(
             self.cpu.vtor + exception_num * 4
         )
-
         ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_PC, exception_pc)
 
-        if exception_num >= 16:
+        # Unpend the interrupt we're about to branch to.
+        if exception_num >= 15:
             with self.nvic_pend_lock:
-                self.nvic_pend[exception_num - 16] = False
-        elif exception_num < 16:
+                self.nvic_pend[exception_num - 15 - 1] = False
+        elif exception_num < 15:
             self.nvic_sys_pend[exception_num - 1] = False
+
+        # If this was an external IB context, it is now safe to 
+        # start execution.
+        if not self.is_internal_ib_context:
+            ucthread().emu_start()
         
     def read_iser(self, size: int, queue: queue.Queue, index: int) -> None:
         value = 0
@@ -502,6 +584,12 @@ for k, v in _INTR_FUNC_MAP.items():
 
 def exc_return_handler() -> None:
     c_emu.intr_op.queue_exc_return()
+
+def pend_external_irq(irq: int) -> None:
+    c_emu.intr_op.queue_external_irq(irq)
+
+def pend_svcall_interrupt() -> None:
+    c_emu.intr_op.queue_svcall_interrupt()
 
 def component_read_handler(
     uc: qemu.Uc,

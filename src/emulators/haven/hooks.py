@@ -16,7 +16,7 @@ from env import *
 from lib.logger import GscemuLogger
 from .registers import REG_DEFS
 
-from src.components.m3 import exc_return_handler
+from src.components.m3 import pend_svcall_interrupt, exc_return_handler
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -48,8 +48,12 @@ def intr_hook(
     user_data: typing.Any,
 ):
     match intno:
+        case 2: # EXCP_SWI
+            pend_svcall_interrupt()
         case 8: # EXCP_EXCEPTION_EXIT
             exc_return_handler()
+        case _:
+            print(f"unhandled intr {intno}")
             
     return True
 
@@ -60,6 +64,7 @@ def pc_logger(
     user_data: typing.TextIO,
 ) -> bool:
     user_data.write(f"{hex(address)}\n")
+    user_data.flush()
 
 def blank_tick_hook(
     uc: qemu.Uc,

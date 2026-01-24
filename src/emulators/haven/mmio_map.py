@@ -13,6 +13,7 @@ import src.components.fuse as fuse0
 import src.components.flash as flash0
 import src.components.globalsec as globalsec0
 import src.components.keymgr as keymgr0
+import src.components.timels as timels0
 
 def blank_read_handler(*args, **kwargs) -> int:
     return 0
@@ -23,6 +24,7 @@ def blank_write_handler(*args, **kwargs) -> None:
 MMIO_HANDLERS = {
     "GLOBALSEC": [globalsec0.component_read_handler, globalsec0.component_write_handler],
     "FUSE0": [fuse0.component_read_handler, fuse0.component_write_handler],
+    "TIMELS0": [timels0.component_read_handler, timels0.component_write_handler],
     "KEYMGR0": [keymgr0.component_read_handler, keymgr0.component_write_handler],
     "UART0": [uart0.component_read_handler, uart0.component_write_handler],
     "UART1": [blank_read_handler, blank_write_handler],

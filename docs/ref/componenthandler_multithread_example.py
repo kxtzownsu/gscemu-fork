@@ -18,15 +18,17 @@ prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 class ComponentXX:
     def __init__(self):
         self.opthread = None
-        self.opthread = queue.Queue()
+        self.opqueue = queue.Queue()
 
     def xx_worker(self):
         while True:
             try:
-                op = self.opthread.get()
+                op = self.opqueue.get()
                 target_fn, args = op
 
                 target_fn(*args)
+
+                self.opqueue.task_done()
 
             except Exception as e:
                 prints.fatal(e)
@@ -77,6 +79,6 @@ def component_write_handler(
     user_data: typing.Any,
 ) -> None:
     try:
-        c_emu.queue_read_worker_op(size, value, _REG_FUNC_MAP[offset][1])
+        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
     except KeyError:
         unhandled_register_exit(g_uc(), ucthread(), prints, "XX", offset)
