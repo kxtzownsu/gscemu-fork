@@ -87,6 +87,11 @@ REG_DEFS = {
         "size": DEFAULT_REG_WIDTH,
     },
 
+    "RBOX0": {
+        "base_addr": 0x40550000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
     "SWDP0": { # No
         "base_addr": 0x40520000,
         "size": DEFAULT_REG_WIDTH,
@@ -169,6 +174,8 @@ GLOBALSEC_REGS = {
     "SIG_UNLOCK": 0x1024,
 
     "HIDE_ROM": 0x40d0,
+
+    "OBFS_SW_EN": 0x40b8,
 
     "ALERT": {
         "CFG_LOCK": 0x102c,
@@ -307,7 +314,7 @@ KEYMGR_REGS = {
         "KEY_W": _reg_list(0x464, 8),
         "ITOP": 0x48c,
 
-        "USE_HIDDEN_KEY": 0x490, # Unimplemented
+        "USE_HIDDEN_KEY": 0x490, # Unimplemented, handled
         "USE_CERT": 0x494, # Unimplemented
         "CERT_OVERRIDE": 0x498, # Unimplemented
         "RAND_STALL_CTL": 0x49c, # Unimplemented, handled
@@ -331,6 +338,10 @@ FLASH_REGS = {
 
     "DOUT_VAL0": 0x3c,
     "DOUT_VAL1": 0x40,
+
+    "PROG_SMART_ALGO": 0x104,
+    "ERASE_SMART_ALGO": 0x134,
+    "BULKERASE_SMART_ALGO": 0x154,
 }
 
 TIMELS_REGS = {

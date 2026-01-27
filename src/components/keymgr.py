@@ -40,6 +40,8 @@ class ShaEngine:
         self.en = 0
         self.wr_en = 0
 
+        self.use_hidden_key = 0
+
         self.input_fifo = bytearray()
         self.sts_h = [0] * 8
         self.key_w = [0] * 8
@@ -242,6 +244,12 @@ class ShaEngine:
 
     def write_itop(self, size: int, value: int) -> None:
         self.itop = value
+
+    def read_use_hidden_key(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.use_hidden_key)
+
+    def write_use_hidden_key(self, size: int, value: int) -> None:
+        self.use_hidden_key = value
 
     def read_input_fifo(self, size: int, queue: queue.Queue) -> None:
         unhandled_register_io(prints, "READ", "KEYMGR0", "INPUT_FIFO")
@@ -491,6 +499,10 @@ _SHAENGINE_FUNC_MAP = {
         c_emu.shaengine.read_rand_stall_ctl,
         c_emu.shaengine.write_rand_stall_ctl,
     ],
+    KEYMGR_REGS["SHA"]["USE_HIDDEN_KEY"]: [
+        c_emu.shaengine.read_use_hidden_key,
+        c_emu.shaengine.write_use_hidden_key,
+    ]
 }
 
 idx_regs_to_regmap(

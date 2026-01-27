@@ -57,6 +57,7 @@ class FlashController:
         # Doesn't matter to us, this is an emulator.
         self.timing_prog_smart_algo = True
         self.timing_erase_smart_algo = True
+        self.timing_bulkerase_smart_algo = True
 
         self.error_placed_time = None
         self.error_code = 0
@@ -323,6 +324,24 @@ class FlashController:
     def write_wr_data(self, size: int, value: int, index: int) -> None:
         self.wr_data[index] = value
 
+    def read_prog_smart_algo(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.timing_prog_smart_algo)
+
+    def write_prog_smart_algo(self, size: int, value: int) -> None:
+        unhandled_register_io(prints, "WRITE", "FLASH0", "PROG_SMART_ALGO")
+
+    def read_erase_smart_algo(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.timing_erase_smart_algo)
+
+    def write_erase_smart_algo(self, size: int, value: int) -> None:
+        unhandled_register_io(prints, "WRITE", "FLASH0", "ERASE_SMART_ALGO")
+
+    def read_bulkerase_smart_algo(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.timing_bulkerase_smart_algo)
+
+    def write_bulkerase_smart_algo(self, size: int, value: int) -> None:
+        unhandled_register_io(prints, "WRITE", "FLASH0", "BULKERASE_SMART_ALGO")
+
 c_emu = FlashController()
 c_emu.start_worker()
 
@@ -350,6 +369,15 @@ _REG_FUNC_MAP = {
     ],
     FLASH_REGS["DOUT_VAL1"]: [
         c_emu.read_dout_val1, c_emu.write_dout_val1
+    ],
+    FLASH_REGS["PROG_SMART_ALGO"]: [
+        c_emu.read_prog_smart_algo, c_emu.write_prog_smart_algo,
+    ],
+    FLASH_REGS["ERASE_SMART_ALGO"]: [
+        c_emu.read_erase_smart_algo, c_emu.write_erase_smart_algo,
+    ],
+    FLASH_REGS["BULKERASE_SMART_ALGO"]: [
+        c_emu.read_bulkerase_smart_algo, c_emu.write_bulkerase_smart_algo,
     ],
 }
 

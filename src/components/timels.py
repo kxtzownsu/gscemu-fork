@@ -1,8 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
-"""Cr50 main timer component."""
+"""Cr50 main timer component.
+
+This component was vibecoded, a rewrite is needed as the vibecoded version does
+not have accurate enough ticks, and honestly this is overall a bad way to go
+around it.
+"""
 
 import typing
+import time
 import unicorn as qemu
 import queue
 import threading
@@ -17,32 +23,63 @@ from src.components.m3 import pend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-# The plan for the LSTimer is that we are able to create a seperate thread that 
-# uses a threading.Event with a timeout, and after X seconds, if the signal
-# is not triggered to stop the timeout, and the timer times out, then we can
-# send an interrupt trigger to the M3 to tell it that the timer has hit the
+TIMER_FREQ_HZ = 8 * 32768
+NS_PER_TICK = 1_000_000_000 / TIMER_FREQ_HZ
+TIMER_IRQS = [159, 160]
+
+class TimerState:
+    """State for a single timer within the TIMELS peripheral."""
+
+    def __init__(self, timer_index: int):
+        self.index = timer_index
+        self.irq = TIMER_IRQS[timer_index]
+
+        # Registers
+        self.control = 0
+        self.status = 0  # Bit 0: WRAPPED
+        self.load = 0
+        self.reloadval = 0xFFFFFFFF
+        self.step = 0
+        self.ier = 0  # Interrupt Enable
+        self.isr = 0  # Interrupt Status
+        self.ipr = 0  # Interrupt Pending
+        self.iar = 0  # Interrupt Acknowledge
+        self.wakeup_ack = 0
+
+        # Runtime state for countdown tracking
+        self.start_time_ns = 0  # perf_counter_ns when timer started
+        self.start_value = 0  # VALUE when timer started
+        self.running = False
+
+# The plan for the TIMELS component is that we are able to create a seperate 
+# thread that uses a threading.Event with a timeout, and after X seconds, if the
+# signal is not triggered to stop the timeout, and the timer times out, then we 
+# can send an interrupt trigger to the M3 to tell it that the timer has hit the
 # timeout.
 
 class LowSpeedTimer:
+    """TIMELS peripheral emulation with two countdown timers.
+
+    This emulator uses high-resolution timing to simulate the timer countdown.
+    Instead of actually decrementing a counter, we record the start time and
+    compute the elapsed ticks on each VALUE read. This provides accurate
+    timing without CPU overhead.
+
+    A separate watchdog thread monitors running timers and triggers interrupts
+    when they expire.
+    """
+
     def __init__(self):
         self.opthread = None
         self.opqueue = queue.Queue()
 
-        self.countdown_thread = None
-        self.countdown_event = threading.Event()
+        self.watchdog_thread = None
+        self.watchdog_stop = threading.Event()
+        self.watchdog_check = threading.Event()
 
-        self.timer_state = [
-            {
-                "CONTROL": 0,
-                "LOAD": 0,
-                "RELOADVAL": 0,
-                "VALUE": 0,
-                "IER": 0,
-                "ISR": 0,
-                "IAR": 0,
-                "WAKEUP_ACK": 0,
-            } for _ in range(2)
-        ]
+        self.timer_lock = threading.Lock()
+
+        self.timers = [TimerState(0), TimerState(1)]
 
     def timels_worker(self):
         while True:
@@ -57,130 +94,205 @@ class LowSpeedTimer:
             except Exception as e:
                 prints.fatal(e)
 
+    def timer_watchdog(self):
+        """Watchdog thread that monitors timers and triggers interrupts.
+
+        This thread wakes up periodically or when signaled to check if any
+        timer has expired. When a timer expires:
+        1. STATUS.WRAPPED is set
+        2. If RELOAD is set, VALUE is reloaded from RELOADVAL
+        3. If IER is enabled, the corresponding IRQ is pended
+        """
+        while not self.watchdog_stop.is_set():
+            self.watchdog_check.wait(timeout=0.001)
+            self.watchdog_check.clear()
+
+            with self.timer_lock:
+                for timer in self.timers:
+                    if not timer.running:
+                        continue
+
+                    current_value = self._compute_value_internal(timer)
+
+                    if current_value == 0:
+                        timer.status |= 1
+                        timer.isr |= 1
+
+                        # Handle reload
+                        if (timer.control & 0x2) and (
+                            timer.control & 0x4
+                        ):
+                            timer.start_value = timer.reloadval
+                            timer.start_time_ns = time.perf_counter_ns()
+                        else:
+                            # Timer stops
+                            timer.running = False
+
+                        if timer.ier:
+                            pend_external_irq(timer.irq)
+
     def start_worker(self):
         if not self.opthread:
             self.opthread = threading.Thread(target=self.timels_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn) -> None:
+        if not self.watchdog_thread:
+            self.watchdog_stop.clear()
+            self.watchdog_thread = threading.Thread(target=self.timer_watchdog)
+            self.watchdog_thread.daemon = True
+            self.watchdog_thread.start()
+
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
-        
+
     def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
-    def countdown_worker(self, timeout_num: int|float, irq: int) -> None:
-        did_timer_hit = self.countdown_event.wait(timeout=timeout_num)
+    def _compute_value_internal(self, timer: TimerState) -> int:
+        if not timer.running:
+            return timer.start_value
 
-        if not did_timer_hit:
-            # The main thread is telling us to kill the worker.
-            return
-        
-        # If we reached here, it means the timer hit 0. Pend an external
-        # interrupt on the M3.
-        pend_external_irq(irq)
+        elapsed_ns = time.perf_counter_ns() - timer.start_time_ns
+        elapsed_ticks = int(elapsed_ns / NS_PER_TICK)
 
-    def pend_countdown_worker(self, timeout_num: int|float, irq: int) -> None:
-        if self.countdown_thread:
-            # Just assume the old thread would be thrown away after this, and
-            # we don't have to handle anything.
-            self.countdown_event.set()
-        
-        self.countdown_thread = threading.Thread(
-            target=self.countdown_worker, args=(timeout_num, irq)
-        )
-        self.countdown_thread.daemon = True
-        self.countdown_thread.start()
+        if elapsed_ticks >= timer.start_value:
+            return 0
 
-    def kill_countdown_worker(self) -> bool:
-        if not self.countdown_thread:
-            return
-        
-        self.countdown_event.set()
-        self.countdown_thread = None
+        return timer.start_value - elapsed_ticks
 
-    def read_timer_control(
-        self, size: int, queue: queue.Queue, index: int
-    ) -> None:
-        queue.put(self.timer_state[index]["CONTROL"])
+    def read_timer_control(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            queue.put(self.timers[index].control)
 
-    def write_timer_control(
-        self, size: int, value: int, index: int
-    ) -> None:
-        self.timer_state[index]["CONTROL"] = value
+    def write_timer_control(self, size: int, value: int, index: int) -> None:
+        with self.timer_lock:
+            timer = self.timers[index]
+            old_control = timer.control
+            timer.control = value
 
-    def read_timer_load(
-        self, size: int, queue: queue.Queue, index: int
-    ) -> None:
-        queue.put(self.timer_state[index]["LOAD"])
+            was_enabled = old_control & 0x1
+            is_enabled = value & 0x1
 
-    def write_timer_load(
-        self, size: int, value: int, index: int
-    ) -> None:
-        self.timer_state[index]["LOAD"] = value
+            if is_enabled and not was_enabled:
+                if timer.start_value == 0:
+                    timer.start_value = timer.load
+                timer.start_time_ns = time.perf_counter_ns()
+                timer.running = True
+                self.watchdog_check.set()
+            elif was_enabled and not is_enabled:
+                current_value = self._compute_value_internal(timer)
+                timer.start_value = current_value
+                timer.running = False
 
-    def read_timer_reloadval(
-        self, size: int, queue: queue.Queue, index: int
-    ) -> None:
-        queue.put(self.timer_state[index]["RELOADVAL"])
+    def read_timer_status(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            queue.put(self.timers[index].status)
 
-    def write_timer_reloadval(
-        self, size: int, value: int, index: int
-    ) -> None:
-        self.timer_state[index]["RELOADVAL"] = value
+    def write_timer_status(self, size: int, value: int, index: int) -> None:
+        # Writing to STATUS typically clears bits that are written as 1
+        with self.timer_lock:
+            self.timers[index].status &= ~value
 
-    def read_timer_value(
-        self, size: int, queue: queue.Queue, index: int
-    ) -> None:
-        queue.put(self.timer_state[index]["VALUE"])
+    # =========================================================================
+    # LOAD Register
+    # =========================================================================
 
-    def write_timer_value(
-        self, size: int, value: int, index: int
-    ) -> None:
-        self.timer_state[index]["VALUE"] = value
+    def read_timer_load(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            queue.put(self.timers[index].load)
 
-    def read_timer_ier(
-        self, size: int, queue: queue.Queue, index: int
-    ) -> None:
-        queue.put(self.timer_state[index]["IER"])
+    def write_timer_load(self, size: int, value: int, index: int) -> None:
+        with self.timer_lock:
+            timer = self.timers[index]
+            timer.load = value
 
-    def write_timer_ier(
-        self, size: int, value: int, index: int
-    ) -> None:
-        self.timer_state[index]["IER"] = value
+            # Writing to LOAD also sets VALUE and restarts the countdown
+            timer.start_value = value
+            if timer.running:
+                timer.start_time_ns = time.perf_counter_ns()
 
-    def read_timer_isr(
-        self, size: int, queue: queue.Queue, index: int
-    ) -> None:
-        queue.put(self.timer_state[index]["ISR"])
+            # Signal watchdog in case timer is about to expire
+            self.watchdog_check.set()
 
-    def write_timer_isr(
-        self, size: int, value: int, index: int
-    ) -> None:
-        self.timer_state[index]["ISR"] = value
+    def read_timer_reloadval(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            queue.put(self.timers[index].reloadval)
 
-    def read_timer_iar(
-        self, size: int, queue: queue.Queue, index: int
-    ) -> None:
-        queue.put(self.timer_state[index]["IAR"])
+    def write_timer_reloadval(self, size: int, value: int, index: int) -> None:
+        with self.timer_lock:
+            self.timers[index].reloadval = value
 
-    def write_timer_iar(
-        self, size: int, value: int, index: int
-    ) -> None:
-        self.timer_state[index]["IAR"] = value
+    def read_timer_value(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            timer = self.timers[index]
+            current_value = self._compute_value_internal(timer)
+            queue.put(current_value)
+
+    def write_timer_value(self, size: int, value: int, index: int) -> None:
+        with self.timer_lock:
+            timer = self.timers[index]
+            timer.start_value = value
+            if timer.running:
+                timer.start_time_ns = time.perf_counter_ns()
+
+    def read_timer_step(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            queue.put(self.timers[index].step)
+
+    def write_timer_step(self, size: int, value: int, index: int) -> None:
+        with self.timer_lock:
+            self.timers[index].step = value
+
+    def read_timer_ier(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            queue.put(self.timers[index].ier)
+
+    def write_timer_ier(self, size: int, value: int, index: int) -> None:
+        with self.timer_lock:
+            self.timers[index].ier = value
+
+    def read_timer_isr(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            queue.put(self.timers[index].isr)
+
+    def write_timer_isr(self, size: int, value: int, index: int) -> None:
+        with self.timer_lock:
+            self.timers[index].isr &= ~value
+
+    def read_timer_ipr(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            queue.put(self.timers[index].ipr)
+
+    def write_timer_ipr(self, size: int, value: int, index: int) -> None:
+        with self.timer_lock:
+            self.timers[index].ipr = value
+
+    def read_timer_iar(self, size: int, queue: queue.Queue, index: int) -> None:
+        with self.timer_lock:
+            queue.put(self.timers[index].iar)
+
+    def write_timer_iar(self, size: int, value: int, index: int) -> None:
+        with self.timer_lock:
+            timer = self.timers[index]
+            if value & 1:
+                timer.isr &= ~1
+                timer.ipr &= ~1
 
     def read_timer_wakeup_ack(
         self, size: int, queue: queue.Queue, index: int
     ) -> None:
-        queue.put(self.timer_state[index]["WAKEUP_ACK"])
+        with self.timer_lock:
+            queue.put(self.timers[index].wakeup_ack)
 
     def write_timer_wakeup_ack(
         self, size: int, value: int, index: int
     ) -> None:
-        self.timer_state[index]["WAKEUP_ACK"] = value
+        with self.timer_lock:
+            self.timers[index].wakeup_ack = value
 
 c_emu = LowSpeedTimer()
 c_emu.start_worker()
@@ -191,6 +303,9 @@ _SUB_TIMER_FUNC_MAP = {
     TIMELS_REGS["TIMER"]["CONTROL"]: [
         c_emu.read_timer_control, c_emu.write_timer_control
     ],
+    TIMELS_REGS["TIMER"]["STATUS"]: [
+        c_emu.read_timer_status, c_emu.write_timer_status
+    ],
     TIMELS_REGS["TIMER"]["LOAD"]: [
         c_emu.read_timer_load, c_emu.write_timer_load
     ],
@@ -200,11 +315,17 @@ _SUB_TIMER_FUNC_MAP = {
     TIMELS_REGS["TIMER"]["VALUE"]: [
         c_emu.read_timer_value, c_emu.write_timer_value
     ],
+    TIMELS_REGS["TIMER"]["STEP"]: [
+        c_emu.read_timer_step, c_emu.write_timer_step
+    ],
     TIMELS_REGS["TIMER"]["IER"]: [
         c_emu.read_timer_ier, c_emu.write_timer_ier
     ],
     TIMELS_REGS["TIMER"]["ISR"]: [
         c_emu.read_timer_isr, c_emu.write_timer_isr
+    ],
+    TIMELS_REGS["TIMER"]["IPR"]: [
+        c_emu.read_timer_ipr, c_emu.write_timer_ipr
     ],
     TIMELS_REGS["TIMER"]["IAR"]: [
         c_emu.read_timer_iar, c_emu.write_timer_iar

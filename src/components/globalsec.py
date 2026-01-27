@@ -40,6 +40,8 @@ class HavenGlobalsec:
         self.sb_bl_sig = [0] * 8
         self.sb_comp_status = False
 
+        self.obfs_sw_en = False
+
         self.permission_runlevel = {
             GLOBALSEC_REGS["CPU0_S_PERMISSION"]: PERMISSION_HIGHEST,
             GLOBALSEC_REGS["CPU0_S_DAP_PERMISSION"]: PERMISSION_HIGHEST,
@@ -289,10 +291,7 @@ class HavenGlobalsec:
             return int(self.sb_comp_status)
 
     def write_sb_comp_status(self, size: int, value: int) -> None:
-        with self.mutex:
-            unhandled_register_io(
-                prints, "WRITE", "GLOBALSEC", "SB_COMP_STATUS"
-            )
+        unhandled_register_io(prints, "WRITE", "GLOBALSEC", "SB_COMP_STATUS")
 
     def read_sb_bl_sig(self, size: int, index: int) -> None:
         # We know that on a Cr50, reading from SB_BL_SIG returns a 0xfacecafe
@@ -304,9 +303,8 @@ class HavenGlobalsec:
             self.sb_bl_sig[index] = value
 
     def read_sig_unlock(self, size: int) -> None:
-        with self.mutex:
-            unhandled_register_io(prints, "READ", "GLOBALSEC", "SIG_UNLOCK")
-            return 0
+        unhandled_register_io(prints, "READ", "GLOBALSEC", "SIG_UNLOCK")
+        return 0
 
     def write_sig_unlock(self, size: int, value: int) -> None:
         with self.mutex:
@@ -336,6 +334,13 @@ class HavenGlobalsec:
             if self.hide_rom:
                 return
             self.hide_rom = value
+
+    def read_obfs_sw_en(self, size: int) -> None:
+        with self.mutex:
+            return self.obfs_sw_en
+
+    def write_obfs_sw_en(self, size: int, value: int) -> None:
+        unhandled_register_io(prints, "WRITE", "GLOBALSEC", "OBFS_SW_EN")
 
     def read_region_register(
         self,
@@ -396,6 +401,9 @@ _REG_FUNC_MAP = {
     ],
     GLOBALSEC_REGS["SB_COMP_STATUS"]: [
         c_emu.read_sb_comp_status, c_emu.write_sb_comp_status
+    ],
+    GLOBALSEC_REGS["OBFS_SW_EN"]: [
+        c_emu.read_obfs_sw_en, c_emu.write_obfs_sw_en
     ],
 }
 
