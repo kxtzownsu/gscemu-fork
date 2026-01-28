@@ -14,6 +14,7 @@ import src.components.flash as flash0
 import src.components.globalsec as globalsec0
 import src.components.keymgr as keymgr0
 import src.components.timels as timels0
+import src.components.crypto as crypto0
 
 def blank_read_handler(*args, **kwargs) -> int:
     return 0
@@ -31,4 +32,5 @@ MMIO_HANDLERS = {
     "UART2": [blank_read_handler, blank_write_handler],
     "FLASH0": [flash0.component_read_handler, flash0.component_write_handler],
     "M3": [m3.component_read_handler, m3.component_write_handler],
+    "CRYPTO0": [crypto0.component_read_handler, crypto0.component_write_handler],
 }

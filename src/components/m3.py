@@ -31,7 +31,7 @@ from lib.helpers import (
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 _CYCCNT_SPEED = (1/24000000) * 1000000000
-_EXC_RETURN_VALS = [0xFFFFFFF0, 0xFFFFFFF2, 0xFFFFFFF4]
+_EXC_RETURN_VALS = [0xFFFFFFF0, 0xFFFFFFF4, 0xFFFFFFF8]
 
 class ArmInterruptHandler:
     def __init__(self, arm_cpu):
@@ -154,6 +154,10 @@ class ArmInterruptHandler:
             sp_type = qemu.arm_const.UC_ARM_REG_MSP
         elif address == _EXC_RETURN_VALS[2]:
             sp_type = qemu.arm_const.UC_ARM_REG_PSP
+        else:
+            prints.fatal(
+                f"EXC_RETURN invalid pc=0x{address:x}"
+            )
 
         if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_IPSR) != 2:
             ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_FAULTMASK, 0)
@@ -186,7 +190,7 @@ class ArmInterruptHandler:
             pending_exceptions[1] = self.nvic_sys_pri[1]
 
         # FAULTMASK is set, all exceptions disabled NMI and Reset.
-        if self.faultmask:
+        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_FAULTMASK):
             return
         
         # HardFault
@@ -194,7 +198,7 @@ class ArmInterruptHandler:
             pending_exceptions[2] = self.nvic_sys_pri[2]
         
         # PRIMASK is set, only allow Reset/NMI/HardFault.
-        if self.primask:
+        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PRIMASK):
             return
         
         for exc in range(len(self.nvic_sys_pend)):

@@ -1,2 +1,3 @@
 termcolor
-unicorn
+unicorn==2.1.5
+git+https://github.com/HavenOverflow/ot_dsim.git

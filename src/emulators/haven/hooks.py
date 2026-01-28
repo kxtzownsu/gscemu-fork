@@ -53,8 +53,10 @@ def intr_hook(
         case 8: # EXCP_EXCEPTION_EXIT
             exc_return_handler()
         case _:
-            print(f"unhandled intr {intno}")
-            
+            prints.fatal(
+                f"unhandled intr={intno}, " +
+                f"pc=0x{ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC):x}")
+
     return True
 
 def pc_logger(

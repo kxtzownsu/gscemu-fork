@@ -12,6 +12,7 @@ from env import *
 from lib.logger import GscemuLogger
 from src.emulators.haven.registers import UART_REGS
 from lib.helpers import unhandled_register_exit, unhandled_register_io
+from src.components.m3 import pend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -41,6 +42,11 @@ class UartController:
                     self.state |= 128 # BIT(7), True
                 else:
                     self.state &= ~128 # BIT(7), False
+                    pend_external_irq(174)
+
+                if not target_fn:
+                    self.opqueue.task_done()
+                    continue
 
                 target_fn(*args) # Splat the arguments into the target_fn
 
@@ -66,6 +72,10 @@ class UartController:
         
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
+
+    def queued_uart_input(self, input: int) -> None:
+        self.input_queue.put(input, block=False)
+        self.opqueue.put([None, tuple()])
 
     def ctrl_process(self):
         # UART_CTRL_TX
@@ -180,6 +190,9 @@ _REG_FUNC_MAP = {
     UART_REGS["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl],
     UART_REGS["ISTATECLR"]: [c_emu.read_istateclr, c_emu.write_istateclr],
 }
+
+def cr50_uart_input(unicode_char_code: int) -> None:
+    c_emu.queued_uart_input(unicode_char_code)
 
 def component_read_handler(
     uc: qemu.Uc,

@@ -18,7 +18,6 @@ from env import *
 from lib.logger import GscemuLogger
 from src.emulators.haven.registers import TIMELS_REGS
 from lib.helpers import unhandled_register_exit, args_lambda_gen
-
 from src.components.m3 import pend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)

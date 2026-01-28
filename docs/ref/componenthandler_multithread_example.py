@@ -55,6 +55,7 @@ class ComponentXX:
         self.xy = value
 
 c_emu = ComponentXX()
+c_emu.start_worker()
 
 _REG_FUNC_MAP = {
     XX_REGS["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]

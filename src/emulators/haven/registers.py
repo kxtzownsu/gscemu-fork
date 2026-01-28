@@ -10,79 +10,75 @@ def _reg_list(starting_offset, indexes, bytes=4):
 
     return temp
 
-# Yes/No/NA
-# No meaning that a handler can be defined, but we haven't done it
-# Yes meaning that a handler exists for that component
-# NA meaning that a handler is not needed for that component.
 REG_DEFS = {
     # Although this is FLASH, this region is immutable. On real silicon,
     # we would not be able to write to the BootROM from userspace.
-    "FLASH_BROM": { # NA
+    "FLASH_BROM": { # No handler necessary
         "base_addr": 0x0,
         "size": 0x2000,
     },
 
-    "FLASH_PROG": { # NA
+    "FLASH_PROG": { # No handler necessary
         "base_addr": 0x40000,
         "size": 0x80000,
     },
 
-    "SRAM": { # NA
+    "SRAM": { # No handler necessary
         "base_addr": 0x10000,
         "size": 0x10000,
     },
 
-    "INFO1": { # NA
+    "INFO1": { # No handler necessary
         "base_addr": 0x28000,
         "size": 0x800,
     },
 
-    "PMU": { # No
+    "PMU": { # Unimplemented
         "base_addr": 0x40000000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "PINMUX": { # No
+    "PINMUX": { # Unimplemented
         "base_addr": 0x40060000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "RTC0": { # No
+    "RTC0": { # Unimplemented
         "base_addr": 0x400a0000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "XO0": { # No
+    "XO0": { # Unimplemented
         "base_addr": 0x400b0000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "GPIO0": { # No
+    "GPIO0": { # Unimplemented
         "base_addr": 0x40200000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "GPIO1": { # No
+    "GPIO1": { # Unimplemented
         "base_addr": 0x40210000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "USB0": { # No
+    "USB0": { # Unimplemented
         "base_addr": 0x40300000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "TRNG0": { # No
+    "TRNG0": { # Unimplemented
         "base_addr": 0x40410000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "CRYPTO0": { # No
-        "base_addr": 0x40420000,
+    "RDD0": { # Unimplemented
+        "base_addr": 0x40440000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "WATCHDOG0": { # No
+    "WATCHDOG0": { # Unimplemented
         "base_addr": 0x40500000,
         "size": DEFAULT_REG_WIDTH,
     },
@@ -92,54 +88,64 @@ REG_DEFS = {
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "SWDP0": { # No
+    "SWDP0": { # Unimplemented
         "base_addr": 0x40520000,
         "size": DEFAULT_REG_WIDTH,
     },
+
+    "SPI0": { # Unimplemented
+        "base_addr": 0x40700000,
+        "size": DEFAULT_REG_WIDTH,
+    }
 }
 
 MMIO_REG_DEFS = {
-    "GLOBALSEC": { # Yes
+    "GLOBALSEC": { 
         "base_addr": 0x40090000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "FUSE0": { # Yes
+    "CRYPTO0": { 
+        "base_addr": 0x40420000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "FUSE0": { 
         "base_addr": 0x40450000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "TIMELS0": { # Yes
+    "TIMELS0": { 
         "base_addr": 0x40540000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "KEYMGR0": { # Yes
+    "KEYMGR0": { 
         "base_addr": 0x40570000,
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "UART0": { # Yes
+    "UART0": { 
         "base_addr": 0x40600000,
         "size": DEFAULT_REG_WIDTH
     },
 
-    "UART1": { # Yes
+    "UART1": { 
         "base_addr": 0x40610000,
         "size": DEFAULT_REG_WIDTH
     },
 
-    "UART2": { # Yes
+    "UART2": { 
         "base_addr": 0x40620000,
         "size": DEFAULT_REG_WIDTH
     },
 
-    "FLASH0": { # Yes
+    "FLASH0": { 
         "base_addr": 0x40720000,
         "size": DEFAULT_REG_WIDTH
     },
 
-    "M3": { # Yes
+    "M3": { 
         "base_addr": 0xe0000000,
         "size": DEFAULT_REG_WIDTH,
     },
@@ -360,4 +366,15 @@ TIMELS_REGS = {
     },
     "TIMER0_BASE": 0x0,
     "TIMER1_BASE": 0x40,
+}
+
+CRYPTO_REGS = {
+    "CONTROL": 0x4,
+    "INT_ENABLE": 0x14,
+    "INT_STATE": 0x18,
+    "HOST_CMD": 0x20,
+    "RAND_STALL_CTL": 0x30,
+    "WIPE_SECRETS": 0x50,
+    "DMEM_DUMMY": _reg_list(0x4000, 1024),
+    "IMEM_DUMMY": _reg_list(0x8000, 1024),
 }

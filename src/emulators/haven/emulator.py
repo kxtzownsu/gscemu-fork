@@ -32,6 +32,7 @@ from lib.logger import GscemuLogger
 from lib.threadutils import UcMutex
 
 from src.components.m3 import c_emu as m3_emu
+from src.components.uart import cr50_uart_input
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -99,6 +100,9 @@ class Emulator:
         # Call this after the emulator has finished initializing.
         self.initialized = True
         prints.info("Emulator initialization success!")
+
+    def uart_input(self, input: int) -> None:
+        cr50_uart_input(input)
 
     def start_emulation(self) -> None:
         """Run the emulator."""
