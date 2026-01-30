@@ -66,6 +66,10 @@ class CryptoAccelerator:
                     self.control_process()
 
                 if self.host_cmd:
+                    # A hack for now to ensure emulation has continued before
+                    # we pull the IRQ pend. Our emulator is running too fast!
+                    time.sleep(0.05)
+                    
                     component_stop_timer_debug()
                     if self.crypto_emulator is None:
                         self.crypto_emulator = CryptoEmu(
@@ -98,9 +102,6 @@ class CryptoAccelerator:
                     self.dmem_mem = self.crypto_emulator.get_full_dmem().copy()
                     component_start_timer_debug()
                     
-                    # A hack for now to ensure emulation has continued before
-                    # we pull the IRQ pend. Our emulator is running too fast!
-                    time.sleep(0.05)
                     pend_external_irq(4)
 
             except Exception as e:
