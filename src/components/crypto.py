@@ -72,17 +72,22 @@ class CryptoAccelerator:
                         )
                     else:
                         self.crypto_emulator.set_pc(self.host_cmd, True)
+
                     self.host_cmd = 0 # Clear HOST_CMD
 
                     cont = True
                     while cont:
                         try:
-                            cont, trace_str, cycles = self.crypto_emulator.step()
+                            cont, _, _ = self.crypto_emulator.step()
                         except Exception as e:
                             cont = False
                             traceback.print_exc()
                             if self.crypto_emulator is not None:
-                                print(self.crypto_emulator.get_instruction(self.crypto_emulator.get_pc()))
+                                print(
+                                    self.crypto_emulator.get_instruction(
+                                        self.crypto_emulator.get_pc()
+                                    )
+                                )
                             prints.fatal(f"CRYPTO engine died :(")
 
                     self.dmem_mem = self.crypto_emulator.get_full_dmem().copy()
@@ -167,7 +172,9 @@ class CryptoAccelerator:
             )
         except Exception:
             if not (value == 0xdddddddd):
-                prints.warning(f"IMEM instruction was invalid! noping out insn {value:x}!")
+                prints.warning(
+                    f"IMEM instruction was invalid! noping out insn {value:x}!"
+                )
 
             assembled = self.assembler["factory"].factory_bin(
                 0xfc000000, self.assembler["ins_ctx"]
@@ -197,10 +204,15 @@ class CryptoAccelerator:
 
         if self.crypto_emulator is not None:
             current_element = self.crypto_emulator.get_dmem(element_idx)
-            self.crypto_emulator.set_dmem(element_idx, (current_element & mask) | (value << bit_offset))
+            self.crypto_emulator.set_dmem(
+                element_idx, 
+                (current_element & mask) | (value << bit_offset)
+            )
         else:
             current_element = self.dmem_mem[element_idx]
-            self.dmem_mem[element_idx] = (current_element & mask) | (value << bit_offset)
+            self.dmem_mem[element_idx] = (
+                (current_element & mask) | (value << bit_offset)
+            )
     
     def read_int_state(self, size: int, queue: queue.Queue):
         # Doesn't matter
