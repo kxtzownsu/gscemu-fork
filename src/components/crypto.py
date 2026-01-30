@@ -6,6 +6,7 @@ import unicorn as qemu
 import queue
 import threading
 import typing
+import time
 
 from lib.globalvars import *
 from env import *
@@ -16,6 +17,7 @@ from lib.helpers import (
     unhandled_register_io,
     idx_regs_to_regmap
 )
+from src.components.m3 import pend_external_irq
 
 # ot_dsim package imports.
 from ot_dsim.bignum_lib.machine import Machine as CryptoEmu
@@ -47,6 +49,11 @@ class CryptoAccelerator:
 
                 if self.control:
                     self.control_process()
+
+                if self.host_cmd:
+                    time.sleep(0.01)
+                    pend_external_irq(4)
+                    self.host_cmd = 0
 
             except Exception as e:
                 prints.fatal(e)
