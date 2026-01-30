@@ -156,8 +156,7 @@ class LowSpeedTimer:
             return timer.start_value
 
         elapsed_ns = time.perf_counter_ns() - timer.start_time_ns
-        # Slow down the timers by 1/2 for now to accomodate CRYPTO.
-        elapsed_ticks = int(elapsed_ns * 0.5 / NS_PER_TICK)
+        elapsed_ticks = int(elapsed_ns / NS_PER_TICK)
 
         if elapsed_ticks >= timer.start_value:
             return 0
@@ -368,3 +367,27 @@ def component_write_handler(
         c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
     except KeyError:
         unhandled_register_exit(g_uc(), ucthread(), prints, "TIMELS0", offset)
+
+
+def component_stop_timer_debug() -> None:
+    with c_emu.timer_lock:
+        for timer in c_emu.timers:
+            if timer.running:
+                current_value = c_emu._compute_value_internal(timer)
+                timer.start_value = current_value
+                timer.running = False
+
+    c_emu.watchdog_check.set()
+
+
+def component_start_timer_debug() -> None:
+    with c_emu.timer_lock:
+        for timer in c_emu.timers:
+            if timer.start_value == 0 and timer.load:
+                timer.start_value = timer.load
+
+            if not timer.running and timer.start_value != 0:
+                timer.start_time_ns = time.perf_counter_ns()
+                timer.running = True
+
+    c_emu.watchdog_check.set()

@@ -19,6 +19,10 @@ from lib.helpers import (
     idx_regs_to_regmap
 )
 from src.components.m3 import pend_external_irq
+from src.components.timels import (
+    component_start_timer_debug, 
+    component_stop_timer_debug
+)
 
 # ot_dsim package imports.
 from ot_dsim.bignum_lib.machine import Machine as CryptoEmu
@@ -62,6 +66,7 @@ class CryptoAccelerator:
                     self.control_process()
 
                 if self.host_cmd:
+                    component_stop_timer_debug()
                     if self.crypto_emulator is None:
                         self.crypto_emulator = CryptoEmu(
                             self.dmem_mem.copy(),
@@ -91,10 +96,11 @@ class CryptoAccelerator:
                             prints.fatal(f"CRYPTO engine died :(")
 
                     self.dmem_mem = self.crypto_emulator.get_full_dmem().copy()
+                    component_start_timer_debug()
                     
                     # A hack for now to ensure emulation has continued before
                     # we pull the IRQ pend. Our emulator is running too fast!
-                    time.sleep(0.01)
+                    time.sleep(0.05)
                     pend_external_irq(4)
 
             except Exception as e:
