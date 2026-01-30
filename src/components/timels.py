@@ -156,7 +156,8 @@ class LowSpeedTimer:
             return timer.start_value
 
         elapsed_ns = time.perf_counter_ns() - timer.start_time_ns
-        elapsed_ticks = int(elapsed_ns / NS_PER_TICK)
+        # Slow down the timers by 1/2 for now to accomodate CRYPTO.
+        elapsed_ticks = int(elapsed_ns * 0.5 / NS_PER_TICK)
 
         if elapsed_ticks >= timer.start_value:
             return 0

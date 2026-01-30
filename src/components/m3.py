@@ -365,6 +365,11 @@ class ArmInterruptHandler:
         )
         ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_PC, exception_pc)
 
+        # prints.debug(
+        #     f"branching to {exception_num} at pc={exception_pc:x}, "+
+        #     f"retpc={ret_pc:x}"
+        # )
+
         # Unpend the interrupt we're about to branch to.
         if exception_num >= 15:
             with self.nvic_pend_lock:

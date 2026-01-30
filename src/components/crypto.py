@@ -6,6 +6,7 @@ import unicorn as qemu
 import queue
 import threading
 import typing
+import traceback
 import time
 
 from lib.globalvars import *
@@ -29,6 +30,11 @@ prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class CryptoAccelerator:
     def __init__(self):
+        self.assembler = {
+            "factory": CryptoEmuIF(),
+            "ins_ctx": CryptoEmuICtx()
+        }
+
         self.opthread = None
         self.opqueue = queue.Queue()
 
@@ -36,6 +42,11 @@ class CryptoAccelerator:
         self.control = 0
         self.rand_stall_ctl = 0
         self.host_cmd = 0
+
+        self.imem_mem = [0] * 1024
+        self.imem_assembled = [0] * 1024
+
+        self.dmem_mem = [0] * 128
 
     def crypto_worker(self):
         while True:
@@ -51,9 +62,35 @@ class CryptoAccelerator:
                     self.control_process()
 
                 if self.host_cmd:
+                    if self.crypto_emulator is None:
+                        self.crypto_emulator = CryptoEmu(
+                            self.dmem_mem.copy(),
+                            self.imem_assembled.copy(),
+                            self.host_cmd,
+                            None,
+                            CryptoEmuICtx()
+                        )
+                    else:
+                        self.crypto_emulator.set_pc(self.host_cmd, True)
+                    self.host_cmd = 0 # Clear HOST_CMD
+
+                    cont = True
+                    while cont:
+                        try:
+                            cont, trace_str, cycles = self.crypto_emulator.step()
+                        except Exception as e:
+                            cont = False
+                            traceback.print_exc()
+                            if self.crypto_emulator is not None:
+                                print(self.crypto_emulator.get_instruction(self.crypto_emulator.get_pc()))
+                            prints.fatal(f"CRYPTO engine died :(")
+
+                    self.dmem_mem = self.crypto_emulator.get_full_dmem().copy()
+                    
+                    # A hack for now to ensure emulation has continued before
+                    # we pull the IRQ pend. Our emulator is running too fast!
                     time.sleep(0.01)
                     pend_external_irq(4)
-                    self.host_cmd = 0
 
             except Exception as e:
                 prints.fatal(e)
@@ -114,40 +151,86 @@ class CryptoAccelerator:
             self.clear_emulator_object()
     
     def read_imem(self, size: int, queue: queue.Queue, index: int):
-        queue.put(0)
+        queue.put(self.imem_mem[index])
 
     def write_imem(self, size: int, value: int, index: int):
-        return
-    
-    def read_dmem(self, size: int, queue: queue.Queue, index: int):
-        queue.put(0)
+        # Clear emulator state on IMEM write if emulator state has been
+        # created?
+        if self.crypto_emulator is not None:
+            self.crypto_emulator = None
+            self.imem_mem = [0] * 1024
+            self.imem_assembled = [0] * 1024
 
+        try:
+            assembled = self.assembler["factory"].factory_bin(
+                value, self.assembler["ins_ctx"]
+            )
+        except Exception:
+            if not (value == 0xdddddddd):
+                prints.warning(f"IMEM instruction was invalid! noping out insn {value:x}!")
+
+            assembled = self.assembler["factory"].factory_bin(
+                0xfc000000, self.assembler["ins_ctx"]
+            )
+
+        self.imem_mem[index] = value
+        self.imem_assembled[index] = assembled
+        
+    def read_dmem(self, size: int, queue: queue.Queue, index: int):
+        element_idx = index // 8
+        word_idx = index % 8
+        bit_offset = word_idx * 32
+            
+        if self.crypto_emulator is not None:
+            queue.put((
+                self.crypto_emulator.get_dmem(element_idx) >> bit_offset
+            ) & 0xFFFFFFFF)
+        else:
+            queue.put((self.dmem_mem[element_idx] >> bit_offset) & 0xFFFFFFFF)
+        
     def write_dmem(self, size: int, value: int, index: int):
-        return
+        element_idx = index // 8
+        word_idx = index % 8
+        value = value & 0xFFFFFFFF
+        bit_offset = word_idx * 32
+        mask = ((1 << 256) - 1) ^ (0xFFFFFFFF << bit_offset)
+
+        if self.crypto_emulator is not None:
+            current_element = self.crypto_emulator.get_dmem(element_idx)
+            self.crypto_emulator.set_dmem(element_idx, (current_element & mask) | (value << bit_offset))
+        else:
+            current_element = self.dmem_mem[element_idx]
+            self.dmem_mem[element_idx] = (current_element & mask) | (value << bit_offset)
     
     def read_int_state(self, size: int, queue: queue.Queue):
+        # Doesn't matter
         queue.put(0)
     
     def write_int_state(self, size: int, value: int):
+        # Doesn't matter
         return
     
     def read_int_enable(self, size: int, queue: queue.Queue):
+        # Doesn't matter
         queue.put(0)
     
     def write_int_enable(self, size: int, value: int):
+        # Doesn't matter
         return
     
     def read_rand_stall_ctl(self, size: int, queue: queue.Queue):
+        # Doesn't matter
         queue.put(self.rand_stall_ctl)
     
     def write_rand_stall_ctl(self, size: int, value: int):
+        # Doesn't matter
         self.rand_stall_ctl = value
 
     def read_host_cmd(self, size: int, queue: queue.Queue):
         queue.put(self.host_cmd)
     
     def write_host_cmd(self, size: int, value: int):
-        self.host_cmd = value
+        self.host_cmd = (value - 0x08000000)
 
 c_emu = CryptoAccelerator()
 c_emu.start_worker()
