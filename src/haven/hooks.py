@@ -14,7 +14,6 @@ import unicorn as qemu
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from .registers import REG_DEFS
 
 from .components.m3 import pend_svcall_interrupt, exc_return_handler
 

@@ -7,7 +7,7 @@ import unicorn as qemu
 from env import *
 from lib.globalvars import *
 from lib.logger import GscemuLogger
-from ..fuse_registers import *
+from .regdefs import FUSE_DEFAULTS
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -21,7 +21,7 @@ def component_read_handler(
     # don't, just return a blanked FUSE value.
     try:
         # FUSE register in our list of known fuse values, return our known val.
-        return DEFAULT_FUSE_VALUES[offset]
+        return FUSE_DEFAULTS[offset]
 
     except KeyError:
         # FUSE register not in our list of known fuse values, give a blank fuse.

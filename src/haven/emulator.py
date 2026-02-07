@@ -27,7 +27,7 @@ import unicorn as qemu
 from lib.globalvars import *
 from .init_utils import *
 from . import hooks
-from .registers import REG_DEFS, MMIO_REG_DEFS
+from .components.regdefs import REG_DEFS, MMIO_REG_DEFS
 from lib.logger import GscemuLogger
 from lib.threadutils import UcMutex
 

@@ -14,7 +14,7 @@ import traceback
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from .registers import REG_DEFS
+from .components.regdefs import REG_DEFS
 from .mmio_map import MMIO_HANDLERS
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)

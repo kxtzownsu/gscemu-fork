@@ -12,7 +12,7 @@ import time
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from ..registers import CRYPTO_REGS
+from .regdefs import CRYPTO_REGS
 from lib.helpers import (
     unhandled_register_exit, 
     unhandled_register_io,

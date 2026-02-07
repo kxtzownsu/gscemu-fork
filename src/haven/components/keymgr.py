@@ -13,7 +13,7 @@ from lib.globalvars import *
 from env import *
 from lib.threadutils import FifoLock
 from lib.logger import GscemuLogger
-from ..registers import REG_DEFS, KEYMGR_REGS
+from .regdefs import KEYMGR_REGS
 from lib.helpers import (
     unhandled_register_io, 
     unhandled_register_exit,

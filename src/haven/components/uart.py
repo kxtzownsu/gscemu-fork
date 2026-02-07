@@ -10,7 +10,7 @@ import sys
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from ..registers import UART_REGS
+from .regdefs import UART_REGS
 from lib.helpers import unhandled_register_exit, unhandled_register_io
 from .m3 import pend_external_irq
 
