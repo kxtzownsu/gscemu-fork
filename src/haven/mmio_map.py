@@ -7,14 +7,14 @@
 """
 
 # Manual import of the component handlers. Refactor in the future?
-import src.components.m3 as m3
-import src.components.uart as uart0
-import src.components.fuse as fuse0
-import src.components.flash as flash0
-import src.components.globalsec as globalsec0
-import src.components.keymgr as keymgr0
-import src.components.timels as timels0
-import src.components.crypto as crypto0
+from .components import m3 as m3
+from .components import uart as uart0
+from .components import fuse as fuse0
+from .components import flash as flash0
+from .components import globalsec as globalsec0
+from .components import keymgr as keymgr0
+from .components import timels as timels0
+from .components import crypto as crypto0
 
 def blank_read_handler(*args, **kwargs) -> int:
     return 0

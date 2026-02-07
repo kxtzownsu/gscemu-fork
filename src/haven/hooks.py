@@ -16,7 +16,7 @@ from env import *
 from lib.logger import GscemuLogger
 from .registers import REG_DEFS
 
-from src.components.m3 import pend_svcall_interrupt, exc_return_handler
+from .components.m3 import pend_svcall_interrupt, exc_return_handler
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

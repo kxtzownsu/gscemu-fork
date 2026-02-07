@@ -12,14 +12,14 @@ import time
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from src.emulators.haven.registers import CRYPTO_REGS
+from ..registers import CRYPTO_REGS
 from lib.helpers import (
     unhandled_register_exit, 
     unhandled_register_io,
     idx_regs_to_regmap
 )
-from src.components.m3 import pend_external_irq
-from src.components.timels import (
+from .m3 import pend_external_irq
+from .timels import (
     component_start_timer_debug, 
     component_stop_timer_debug
 )

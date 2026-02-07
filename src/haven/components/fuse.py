@@ -7,7 +7,7 @@ import unicorn as qemu
 from env import *
 from lib.globalvars import *
 from lib.logger import GscemuLogger
-from src.emulators.haven.fuse_registers import *
+from ..fuse_registers import *
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

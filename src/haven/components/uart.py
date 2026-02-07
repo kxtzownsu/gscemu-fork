@@ -10,9 +10,9 @@ import sys
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from src.emulators.haven.registers import UART_REGS
+from ..registers import UART_REGS
 from lib.helpers import unhandled_register_exit, unhandled_register_io
-from src.components.m3 import pend_external_irq
+from .m3 import pend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

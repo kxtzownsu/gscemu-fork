@@ -12,7 +12,7 @@ GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(
 
 GSCEMULATOR_FW_PATHS = {
     "bootrom": "fw/rom/haven.rom",
-    "firmware": "fw/cr50/0_5_271.bin"
+    "firmware": "fw/haven/cr50_prod_0_5_271.bin"
 }
 GSCEMULATOR_FW_STRICT_SIZE_CHECKING = False
 

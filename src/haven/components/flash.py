@@ -10,7 +10,7 @@ import time
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from src.emulators.haven.registers import FLASH_REGS
+from ..registers import FLASH_REGS
 from lib.helpers import (
     unhandled_register_exit, 
     unhandled_register_io, 

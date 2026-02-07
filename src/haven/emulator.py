@@ -31,8 +31,8 @@ from .registers import REG_DEFS, MMIO_REG_DEFS
 from lib.logger import GscemuLogger
 from lib.threadutils import UcMutex
 
-from src.components.m3 import c_emu as m3_emu
-from src.components.uart import cr50_uart_input
+from .components.m3 import c_emu as m3_emu
+from .components.uart import cr50_uart_input
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

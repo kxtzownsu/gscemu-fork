@@ -20,7 +20,7 @@ import tty
 
 from lib.logger import GscemuLogger
 from env import *
-from src.emulators.haven import Emulator as havnEmulator
+from src.haven import Emulator as havnEmulator
 
 old_terminal_settings = termios.tcgetattr(sys.stdin)
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)

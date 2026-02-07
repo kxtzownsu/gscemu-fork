@@ -17,7 +17,7 @@ from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
-from src.emulators.haven.registers import M3_REGS
+from ..registers import M3_REGS
 from lib.helpers import (
     unhandled_register_io, 
     unhandled_register_exit,
