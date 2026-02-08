@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
-"""Example component handler"""
 
 import typing
 import unicorn as qemu
@@ -10,17 +9,19 @@ import threading
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import XX_REGS
+from .regdefs import USB_REGS
 from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-class ComponentXX:
+class UsbController:
     def __init__(self):
         self.opthread = None
         self.opqueue = queue.Queue()
 
-    def xx_worker(self):
+        self.grstctl = 0
+
+    def usb_worker(self):
         while True:
             try:
                 op = self.opqueue.get()
@@ -35,7 +36,7 @@ class ComponentXX:
 
     def start_worker(self):
         if not self.opthread:
-            self.opthread = threading.Thread(target=self.xx_worker)
+            self.opthread = threading.Thread(target=self.usb_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
@@ -48,17 +49,17 @@ class ComponentXX:
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
-    def read_xy(self, size: int, queue: queue.Queue):
-        queue.put(self.xy)
+    def read_grstctl(self, size: int, queue: queue.Queue):
+        queue.put(self.grstctl)
     
-    def write_xy(self, size: int, value: int):
-        self.xy = value
+    def write_grstctl(self, size: int, value: int):
+        return
 
-c_emu = ComponentXX()
+c_emu = UsbController()
 c_emu.start_worker()
 
 _REG_FUNC_MAP = {
-    XX_REGS["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]
+    USB_REGS["GRSTCTL"]: [c_emu.read_grstctl, c_emu.write_grstctl]
 }
 
 def component_read_handler(
@@ -70,7 +71,7 @@ def component_read_handler(
     try:
         return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
     except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "XX", offset)
+        return 0
 
 def component_write_handler(
     uc: qemu.Uc,
@@ -82,4 +83,4 @@ def component_write_handler(
     try:
         c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
     except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "XX", offset)
+        return 0

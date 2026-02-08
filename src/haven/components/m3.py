@@ -31,7 +31,7 @@ from lib.helpers import (
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 _CYCCNT_SPEED = (1/24000000) * 1000000000
-_EXC_RETURN_VALS = [0xFFFFFFF0, 0xFFFFFFF4, 0xFFFFFFF8]
+_EXC_RETURN_VALS = [0xFFFFFFF1, 0xFFFFFFF9, 0xFFFFFFFD]
 
 class ArmInterruptHandler:
     def __init__(self, arm_cpu):
@@ -63,17 +63,20 @@ class ArmInterruptHandler:
         self.winning_exception_lock = threading.Lock()
         self.winning_exception = 0
 
-        # We need this variable to track if the interrupt was software or
-        # "hardware" triggered, so that we can safely branch to
+        # We need these 2 variables as the emulator can call an interrupt
+        # when it is in different states. We need to track when to increment
+        # the return pc, when not to, etc, so that we can safely branch to
         # exceptions. This variable should only be read in the
         # branch_to_exception function, and nowhere else.
-        self.is_internal_ib_context = False
+        self.intr_ctx_increment_pc = False
+        self.intr_ctx_emu_stop = False
 
     def m3_intr_worker(self):
         while True:
             try:
-                target_fn, internal_ib_ctx, args = self.intr_queue.get()
-                self.is_internal_ib_context = internal_ib_ctx
+                target_fn, ctx_ipc, ctx_emu_stop, args = self.intr_queue.get()
+                self.intr_ctx_increment_pc = ctx_ipc
+                self.intr_ctx_emu_stop = ctx_emu_stop
 
                 # Process the interrupt op
                 target_fn(*args)
@@ -117,7 +120,12 @@ class ArmInterruptHandler:
         target_fn: typing.Callable
     ) -> None:
         retqueue = queue.Queue()
-        self.intr_queue.put([target_fn, True, (size, retqueue)])
+        self.intr_queue.put([
+            target_fn,
+            True, # increment_pc
+            False, # emu_stop
+            (size, retqueue)
+        ])
         self.intr_queue.join()
         return retqueue.get_nowait()
         
@@ -127,29 +135,49 @@ class ArmInterruptHandler:
         value: int, 
         target_fn: typing.Callable
     ):
-        self.intr_queue.put([target_fn, True, (size, value)])
+        self.intr_queue.put([
+            target_fn, 
+            True, # increment_pc
+            False, # emu_stop
+            (size, value)
+        ])
         self.intr_queue.join()
 
     def queue_exc_return(self) -> None:
-        self.intr_queue.put([self.exc_return_callback, False, tuple()])
+        self.intr_queue.put([
+            self.exc_return_callback, 
+            False, # increment_pc
+            False, # emu_stop
+            tuple()
+        ])
         self.intr_queue.join()
-
-    def queue_external_irq(self, irq) -> None:
-        self.intr_queue.put([self.pend_external_irq, True, (irq,)])
-        self.intr_queue.join()
-
-    def pend_external_irq(self, irq) -> None:
-        self.nvic_pend[irq] = True
 
     def queue_svcall_interrupt(self) -> None:
-        self.intr_queue.put([self.pend_svcall_interrupt, False, tuple()])
+        self.intr_queue.put([
+            self.pend_svcall_interrupt, 
+            False, # increment_pc
+            False, # emu_stop
+            tuple()
+        ])
         self.intr_queue.join()
 
     def pend_svcall_interrupt(self) -> None:
         self.nvic_sys_pend[9 + 1] = True
 
+    def queue_external_irq(self, irq) -> None:
+        self.intr_queue.put([
+            self.pend_external_irq, 
+            False, # increment_pc
+            True, # emu_stop
+            (irq,)
+        ])
+        self.intr_queue.join()
+
+    def pend_external_irq(self, irq) -> None:
+        self.nvic_pend[irq] = True
+
     def exc_return_callback(self) -> None:
-        address = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC)
+        address = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC) | 1
         if address == _EXC_RETURN_VALS[0] or address == _EXC_RETURN_VALS[1]:
             sp_type = qemu.arm_const.UC_ARM_REG_MSP
         elif address == _EXC_RETURN_VALS[2]:
@@ -190,16 +218,16 @@ class ArmInterruptHandler:
             pending_exceptions[1] = self.nvic_sys_pri[1]
 
         # FAULTMASK is set, all exceptions disabled NMI and Reset.
-        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_FAULTMASK):
-            return
+        # if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_FAULTMASK):
+        #     return
         
         # HardFault
         if self.nvic_sys_pend[2]:
             pending_exceptions[2] = self.nvic_sys_pri[2]
         
         # PRIMASK is set, only allow Reset/NMI/HardFault.
-        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PRIMASK):
-            return
+        # if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PRIMASK):
+        #     return
         
         for exc in range(len(self.nvic_sys_pend)):
             if not self.nvic_sys_pend[exc]:
@@ -254,9 +282,9 @@ class ArmInterruptHandler:
         # as we do not need to check for a pending interrupt every instruction,
         # which detrimentally affects execution, expecially within Python.
         #
-        # Therefore, we have 2 interrupt branching contexts. 
+        # Therefore, we have 2 variables to define interrupt behavior.
         # 
-        # External IB Context:
+        # intr_ctx_emu_stop:
         # If the last operation to change a condition within the M3 was 
         # from an externally triggered function, which is to say running 
         # pend_external_irq in a seperate thread, then that means the emulator 
@@ -268,9 +296,9 @@ class ArmInterruptHandler:
         # state to handle an interrupt and save the exception frame to the
         # stack.
         #
-        # Internal IB Context:
+        # intr_ctx_pc_increment:
         # If the last operation to change a condition within the M3 was from an
-        # internally triggered function, which is to say writing to the STIR
+        # internally triggered mem write, which is to say writing to the STIR
         # register, then the emulator has already stopped running. We can just
         # modify emulator state directly. The issue is that the PC has not been
         # advanced yet. Therefore, from our current PC, we need to calculate our
@@ -285,16 +313,14 @@ class ArmInterruptHandler:
         # this to only when we're calling from an external IB context, because
         # that's realistically the only time we need it anyways.
 
-        # Stop the emulator on the next TB. This only applies if we aren't
-        # running in the mmio callback.
-        if not self.is_internal_ib_context:
+        # Stop the emulator on the next TB.
+        if self.intr_ctx_emu_stop:
             ucthread().emu_pause()
 
         ret_pc = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC)
 
-        # Since our PC hasn't been advanced yet in the mmio_map write callback,
-        # we need to advance it ourselves.
-        if self.is_internal_ib_context:
+        # Using a ARM instruction opcode hack, find the next pc.
+        if self.intr_ctx_increment_pc:
             ret_pc += armv7m_find_instruction_size(ucmutex(), ret_pc)
 
         ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_PC, ret_pc | 1)
@@ -348,7 +374,7 @@ class ArmInterruptHandler:
             write_u32_to_sp(ucmutex(), reg_val)
         
         # Place EXC_RETURN val into LR and enter handler mode by changing IPSR.
-        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_LR, built_exc_return|1)
+        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_LR, built_exc_return)
         ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_IPSR, exception_num)
 
         # IT state is cleared, as documented in the ARM psuedocode
@@ -377,9 +403,7 @@ class ArmInterruptHandler:
         elif exception_num < 15:
             self.nvic_sys_pend[exception_num - 1] = False
 
-        # If this was an external IB context, it is now safe to 
-        # start execution.
-        if not self.is_internal_ib_context:
+        if self.intr_ctx_emu_stop:
             ucthread().emu_start()
         
     def read_iser(self, size: int, queue: queue.Queue, index: int) -> None:

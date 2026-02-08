@@ -10,7 +10,7 @@ from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
-from src.emulators.haven.registers import XX_REGS
+from .regdefs import XX_REGS
 from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)

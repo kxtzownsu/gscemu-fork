@@ -50,12 +50,6 @@ class TimerState:
         self.start_value = 0  # VALUE when timer started
         self.running = False
 
-# The plan for the TIMELS component is that we are able to create a seperate 
-# thread that uses a threading.Event with a timeout, and after X seconds, if the
-# signal is not triggered to stop the timeout, and the timer times out, then we 
-# can send an interrupt trigger to the M3 to tell it that the timer has hit the
-# timeout.
-
 class LowSpeedTimer:
     """TIMELS peripheral emulation with two countdown timers.
 
@@ -111,20 +105,24 @@ class LowSpeedTimer:
                     if not timer.running:
                         continue
 
-                    current_value = self._compute_value_internal(timer)
+                    elapsed_ns = time.monotonic_ns() - timer.start_time_ns
+                    elapsed_ticks = int(elapsed_ns / NS_PER_TICK)
 
-                    if current_value == 0:
+                    if (
+                        (elapsed_ticks >= timer.start_value) 
+                        and 
+                        not (timer.status & 1)
+                    ):
                         timer.status |= 1
                         timer.isr |= 1
 
                         # Handle reload
-                        if (timer.control & 0x2) and (
-                            timer.control & 0x4
-                        ):
+                        if timer.control & 0x2:
                             timer.start_value = timer.reloadval
-                            timer.start_time_ns = time.perf_counter_ns()
+                            timer.start_time_ns = time.monotonic_ns()
                         else:
                             # Timer stops
+                            timer.start_value = 0
                             timer.running = False
 
                         if timer.ier:
@@ -155,7 +153,7 @@ class LowSpeedTimer:
         if not timer.running:
             return timer.start_value
 
-        elapsed_ns = time.perf_counter_ns() - timer.start_time_ns
+        elapsed_ns = time.monotonic_ns() - timer.start_time_ns
         elapsed_ticks = int(elapsed_ns / NS_PER_TICK)
 
         if elapsed_ticks >= timer.start_value:
@@ -179,7 +177,7 @@ class LowSpeedTimer:
             if is_enabled and not was_enabled:
                 if timer.start_value == 0:
                     timer.start_value = timer.load
-                timer.start_time_ns = time.perf_counter_ns()
+                timer.start_time_ns = time.monotonic_ns()
                 timer.running = True
                 self.watchdog_check.set()
             elif was_enabled and not is_enabled:
@@ -212,7 +210,7 @@ class LowSpeedTimer:
             # Writing to LOAD also sets VALUE and restarts the countdown
             timer.start_value = value
             if timer.running:
-                timer.start_time_ns = time.perf_counter_ns()
+                timer.start_time_ns = time.monotonic_ns()
 
             # Signal watchdog in case timer is about to expire
             self.watchdog_check.set()
@@ -236,7 +234,7 @@ class LowSpeedTimer:
             timer = self.timers[index]
             timer.start_value = value
             if timer.running:
-                timer.start_time_ns = time.perf_counter_ns()
+                timer.start_time_ns = time.monotonic_ns()
 
     def read_timer_step(self, size: int, queue: queue.Queue, index: int) -> None:
         with self.timer_lock:
@@ -278,6 +276,7 @@ class LowSpeedTimer:
         with self.timer_lock:
             timer = self.timers[index]
             if value & 1:
+                timer.status &= ~1
                 timer.isr &= ~1
                 timer.ipr &= ~1
 
@@ -387,7 +386,7 @@ def component_start_timer_debug() -> None:
                 timer.start_value = timer.load
 
             if not timer.running and timer.start_value != 0:
-                timer.start_time_ns = time.perf_counter_ns()
+                timer.start_time_ns = time.monotonic_ns()
                 timer.running = True
 
     c_emu.watchdog_check.set()

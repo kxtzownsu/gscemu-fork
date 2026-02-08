@@ -63,11 +63,6 @@ REG_DEFS = {
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "USB0": { # Unimplemented
-        "base_addr": 0x40300000,
-        "size": DEFAULT_REG_WIDTH,
-    },
-
     "TRNG0": { # Unimplemented
         "base_addr": 0x40410000,
         "size": DEFAULT_REG_WIDTH,
@@ -102,6 +97,11 @@ REG_DEFS = {
 MMIO_REG_DEFS = {
     "GLOBALSEC": { 
         "base_addr": 0x40090000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "USB0": {
+        "base_addr": 0x40300000,
         "size": DEFAULT_REG_WIDTH,
     },
 
@@ -377,4 +377,8 @@ CRYPTO_REGS = {
     "WIPE_SECRETS": 0x50,
     "DMEM_DUMMY": _reg_list(0x4000, 1024),
     "IMEM_DUMMY": _reg_list(0x8000, 1024),
+}
+
+USB_REGS = {
+    "GRSTCTL": 0x10,
 }
