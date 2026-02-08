@@ -36,7 +36,8 @@ def mem_invalid_access(
 
     prints.fatal(
         f"Invalid memory {kind[access]} " + 
-        f"with address=0x{address:08x}, size={size}"
+        f"with address=0x{address:08x}, size={size}, " +
+        f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
     )
     
     return False
@@ -56,6 +57,21 @@ def intr_hook(
                 f"unhandled intr={intno}, " +
                 f"pc=0x{ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC):x}")
 
+    return True
+
+def handle_wfi_instruction(
+    uc: qemu.Uc,
+    user_data: typing.Any,
+):
+    # TODO(appleflyer): 
+    # In the future, this should wait until there's an interrupt pending.
+    # Just dont do anything for now :P
+
+    # Increment the PC past the wfi instruction.
+    ucmutex().reg_write(
+        qemu.arm_const.UC_ARM_REG_PC, 
+        (ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC) + 2) | 1
+    )
     return True
 
 def pc_logger(

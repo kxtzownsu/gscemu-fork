@@ -91,6 +91,13 @@ class Emulator:
         # this with the M3 in the future. MemManage intr?
         g_uc().hook_add(UNICORN_MEM_INVALID_HOOKS, hooks.mem_invalid_access)
 
+        # We need to manually handle the wfi instruction as our interrupt
+        # handler is here.
+        g_uc().hook_add(
+            qemu.UC_HOOK_INSN, hooks.handle_wfi_instruction, None, 
+            1, 0, qemu.arm_const.UC_ARM_INS_WFI
+        )
+
         if GSCEMULATOR_PC_LOGGING_SETTINGS["log_pc"]:
             self.pc_logger = open(
                 GSCEMULATOR_PC_LOGGING_SETTINGS["log_file_path"], "w"

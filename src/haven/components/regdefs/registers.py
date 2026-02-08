@@ -35,7 +35,7 @@ REG_DEFS = {
 
     "PMU": { # Unimplemented
         "base_addr": 0x40000000,
-        "size": DEFAULT_REG_WIDTH,
+        "size": DEFAULT_REG_WIDTH * 2, # PMU has an unusually long reg width.
     },
 
     "PINMUX": { # Unimplemented
@@ -50,16 +50,6 @@ REG_DEFS = {
 
     "XO0": { # Unimplemented
         "base_addr": 0x400b0000,
-        "size": DEFAULT_REG_WIDTH,
-    },
-
-    "GPIO0": { # Unimplemented
-        "base_addr": 0x40200000,
-        "size": DEFAULT_REG_WIDTH,
-    },
-
-    "GPIO1": { # Unimplemented
-        "base_addr": 0x40210000,
         "size": DEFAULT_REG_WIDTH,
     },
 
@@ -78,6 +68,11 @@ REG_DEFS = {
         "size": DEFAULT_REG_WIDTH,
     },
 
+    "I2CS0": {
+        "base_addr": 0x40530000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
     "RBOX0": {
         "base_addr": 0x40550000,
         "size": DEFAULT_REG_WIDTH,
@@ -85,6 +80,11 @@ REG_DEFS = {
 
     "SWDP0": { # Unimplemented
         "base_addr": 0x40520000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "I2C0": {
+        "base_addr": 0x40630000,
         "size": DEFAULT_REG_WIDTH,
     },
 
@@ -97,6 +97,16 @@ REG_DEFS = {
 MMIO_REG_DEFS = {
     "GLOBALSEC": { 
         "base_addr": 0x40090000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "GPIO0": {
+        "base_addr": 0x40200000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "GPIO1": {
+        "base_addr": 0x40210000,
         "size": DEFAULT_REG_WIDTH,
     },
 
@@ -381,4 +391,8 @@ CRYPTO_REGS = {
 
 USB_REGS = {
     "GRSTCTL": 0x10,
+}
+
+GPIO_REGS = {
+    "DATAIN": 0x0,
 }
