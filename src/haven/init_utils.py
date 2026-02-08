@@ -71,10 +71,7 @@ def prepare_info1_space() -> None:
     """We need to fill the INFO1 space with 0xFF every initialization."""
     g_uc().mem_write(
         REG_DEFS["INFO1"]["base_addr"], 
-        (b'\xff' * 
-        ((REG_DEFS["INFO1"]["base_addr"] + REG_DEFS["INFO1"]["size"]) 
-          - REG_DEFS["INFO1"]["base_addr"])
-        )
+        (b'\xff' * REG_DEFS["INFO1"]["size"])
     )
 
 def load_firmware(
