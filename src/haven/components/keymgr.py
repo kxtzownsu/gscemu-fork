@@ -127,7 +127,6 @@ class ShaEngine:
                 self.wr_en = 0
                 self.input_fifo = bytearray()
                 self.sts_h = [0] * 8
-                self.key_w = [0] * 8
 
                 self.trig &= ~2 # Clear the TRIG bit
 
@@ -337,6 +336,7 @@ class KeymgrController:
 
         self.hkey_rwr = [0] * 8
         self.hkey_fwr = [0] * 8
+        self.hkey_frr = [0] * 8
         self.hkey_err_flags = 0
 
         self.fwr_vld = 0
@@ -361,6 +361,16 @@ class KeymgrController:
             return self.hkey_fwr[index]
 
     def write_hkey_fwr(
+        self, size: int, value: int, index: int
+    ) -> None:
+        with self.mutex:
+            self.hkey_fwr[index] = value
+
+    def read_hkey_frr(self, size: int, index: int) -> None:
+        with self.mutex:
+            return self.hkey_fwr[index]
+
+    def write_hkey_frr(
         self, size: int, value: int, index: int
     ) -> None:
         with self.mutex:
@@ -513,6 +523,11 @@ idx_regs_to_regmap(
 idx_regs_to_regmap(
     _REG_FUNC_MAP, KEYMGR_REGS["HKEY_FWR"],
     c_emu.read_hkey_fwr, c_emu.write_hkey_fwr
+)
+
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, KEYMGR_REGS["HKEY_FRR"],
+    c_emu.read_hkey_frr, c_emu.write_hkey_frr
 )
 
 idx_regs_to_regmap(

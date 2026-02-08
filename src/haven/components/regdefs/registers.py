@@ -309,6 +309,7 @@ M3_REGS = {
 KEYMGR_REGS = {
     "HKEY_RWR": _reg_list(0x3000, 8),
     "HKEY_FWR": _reg_list(0x3100, 8),
+    "HKEY_FRR": _reg_list(0x3300, 8),
     "FW_MAJOR_VERSION": 0x3124,
     "FWR_VLD": 0x3120,
     "FWR_LOCK": 0x3128,

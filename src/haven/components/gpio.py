@@ -67,6 +67,14 @@ c_emu_0.start_worker()
 c_emu_1 = GpioController()
 c_emu_1.start_worker()
 
+# Assert GPIO_BATT_PRES_L to allow CCD to be opened
+c_emu_0.datain_manual_write(6)
+
+# Assert GPIO_I2CP_SDA to signal that the I2C bus is idle, else the console
+# gets spammed.
+c_emu_0.queue_write_datain_manual(14)
+
+# Assert GPIO_TPM_RST_L to signal that the AP is on.
 c_emu_1.queue_write_datain_manual(0)
 
 _REG_FUNC_MAP_0 = {
