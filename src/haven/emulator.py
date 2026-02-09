@@ -85,6 +85,8 @@ class Emulator:
             prints.fatal("Failed to load firmware during init process.")
             return
         
+        install_tpm_endorsement_certs()
+        
         g_uc().hook_add(qemu.UC_HOOK_INTR, hooks.intr_hook)
         
         # We need to also capture invalid memory accesses. We should integrate

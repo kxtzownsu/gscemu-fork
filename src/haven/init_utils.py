@@ -10,12 +10,16 @@
 
 import unicorn as qemu
 import traceback
+import hashlib
+import struct
+import hmac
 
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 from .components.regdefs import REG_DEFS
 from .mmio_map import MMIO_HANDLERS
+from .endorsement_cert import *
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -150,3 +154,45 @@ def load_firmware(
                      fw_data[:mem_map_list["FLASH_PROG"]["size"]])
     
     return True
+
+def install_tpm_endorsement_certs():
+    # Write the EPS into INFO1
+    g_uc().mem_write(0x28000 + 0x600, FIXED_ENDORSEMENT_SEED)
+
+    # Build the cert region in RO_A
+
+    cert_region = bytearray()
+    # RSA cert
+    rsa_component_size = len(FIXED_RSA_CERT) + 8
+    cert_region.extend(struct.pack('<H', rsa_component_size))
+    cert_region.append(129)
+    cert_region.extend(bytes(5))
+    
+    cert_region.extend(bytes(4))
+    cert_region.extend(struct.pack('<I', len(FIXED_RSA_CERT)))
+    cert_region.extend(FIXED_RSA_CERT)
+    
+    # ECC cert
+    ecc_component_size = len(FIXED_ECC_CERT) + 8
+    cert_region.extend(struct.pack('<H', ecc_component_size))
+    cert_region.append(130)
+    cert_region.extend(bytes(5))
+
+    cert_region.extend(bytes(4))
+    cert_region.extend(struct.pack('<I', len(FIXED_ECC_CERT)))
+    cert_region.extend(FIXED_ECC_CERT)
+    
+    # padding
+    current_size = len(cert_region)
+    padding_needed = 2016 - current_size # 2048 - 32 for HMAC
+    if padding_needed < 0:
+        prints.fatal("building cert region failed!")
+    cert_region.extend(bytes(padding_needed))
+    
+    # key1 = HMAC-SHA256(eps, "RSA")
+    key1 = hmac.new(FIXED_ENDORSEMENT_SEED, b"RSA\x00", hashlib.sha256).digest()
+    # final_hmac = HMAC-SHA256(key1, cert_data)
+    hmac_value = hmac.new(key1, bytes(cert_region), hashlib.sha256).digest()
+    cert_region.extend(hmac_value)
+
+    g_uc().mem_write(0x43800, bytes(cert_region))

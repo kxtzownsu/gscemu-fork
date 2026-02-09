@@ -17,6 +17,7 @@ from .components import timels as timels0
 from .components import crypto as crypto0
 from .components import usb as usb0
 from .components import gpio
+from .components import trng
 
 def blank_read_handler(*args, **kwargs) -> int:
     return 0
@@ -38,4 +39,5 @@ MMIO_HANDLERS = {
     "USB0": [usb0.component_read_handler, usb0.component_write_handler],
     "GPIO0": [gpio.component_read_handler_0, gpio.component_write_handler_0],
     "GPIO1": [gpio.component_read_handler_1, gpio.component_write_handler_1],
+    "TRNG0": [trng.component_read_handler, trng.component_write_handler],
 }

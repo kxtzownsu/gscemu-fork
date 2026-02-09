@@ -1,5 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
+"""Cr50 KEYMGR component
+
+KEYMGR is used for 2 main purposes:
+- AES/GCM operations
+- SHA operations
+
+For the SHA engine, it has been rewritten from the old gscemu v2 impl.
+FOr the AES engine, it has fundamentally not changed from gscemu v2.
+"""
 
 import typing
 import unicorn as qemu
@@ -8,6 +17,7 @@ import threading
 import struct
 import hashlib
 import hmac
+from Crypto.Cipher import AES as domeAES
 
 from lib.globalvars import *
 from env import *
@@ -101,6 +111,15 @@ class ShaEngine:
             self.opthread.daemon = True
             self.opthread.start()
 
+    def queue_read_worker_op(self, size: int, target_fn):
+        retqueue = queue.Queue()
+        self.opqueue.put([target_fn, (size, retqueue)])
+        self.opqueue.join()
+        return retqueue.get_nowait()
+        
+    def queue_write_worker_op(self, size: int, value: int, target_fn):
+        self.opqueue.put([target_fn, (size, value)])
+
     def trig_process(self):
         match self.trig:
             case 1: # BIT(0)
@@ -187,15 +206,6 @@ class ShaEngine:
 
         self.start_hash = False
         self.input_fifo = bytearray()
-
-    def queue_read_worker_op(self, size: int, target_fn):
-        retqueue = queue.Queue()
-        self.opqueue.put([target_fn, (size, retqueue)])
-        self.opqueue.join()
-        return retqueue.get_nowait()
-        
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
-        self.opqueue.put([target_fn, (size, value)])
 
     def read_cfg_msglen_lo(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.msglen_lo)
@@ -321,12 +331,351 @@ class ShaEngine:
         self.use_cert["INDEX"] = (value & 0x3f)
         self.use_cert["ENABLE"] = (value & 0x40) >> 0x6
         self.use_cert["CHECK_ONLY"] = (value & 0x80) >> 0x7
+
+class AesEngine:
+    def __init__(self):
+        self.opqueue = queue.Queue()
+        self.opthread = None
+
+        self.aes_cipher = None
         
+        self.ctrl = {
+            "RESET": 0,
+            "KEYSIZE": 0, # 0 = AES-128, 1 = AES-192, 2 = AES-256
+            "CIPHER_MODE": 0, # 0 = ECB, 1 = CTR, 2 = CBC, 3 = GCM
+            "ENC_MODE": 0, # 0 = DECRYPT, 1 = ENCRYPT
+            "CTR_BIG_ENDIAN": 0, # 0 = LE, 1 = BE
+            "ENABLE": 0,
+        }
+
+        self.key_start = 0
+        self.aes_key = [0] * len(KEYMGR_REGS["AES"]["KEY"])
+        
+        self.counter = [0] * len(KEYMGR_REGS["AES"]["CTR"])
+        self.counter_updated = False
+        
+        self.gcm_h = [0] * len(KEYMGR_REGS["AES"]["GCM_H"])
+        self.gcm_mac = [0] * len(KEYMGR_REGS["AES"]["GCM_MAC"])
+        self.gcm_hash_in = [0] * len(KEYMGR_REGS["AES"]["GCM_HASH_IN"])
+        self.gcm_do_acc = 0
+        
+        self.rand_stall = 0
+        self.use_hidden_key = 0
+
+        self.wfifo = queue.Queue()
+        self.rfifo = queue.Queue()
+        self.rfifo_empty = True
+        self.wfifo_empty = True
+
+    def aes_worker(self):
+        while True:
+            try:
+                # Wait for the next operation to enter the queue
+                target_fn, args = self.opqueue.get()
+                
+                target_fn(*args) # Splat our arguments into the target_fn
+
+                # For write operations, this doesn't do anything. For read
+                # operations, we need to tell the handler that we have processed
+                # the value, and execution can proceed.
+                self.opqueue.task_done()
+
+                if self.ctrl["RESET"]:
+                    self.aes_cipher = None
+                    self.ctrl["ENABLE"] = 0
+                    self.ctrl["KEYSIZE"] = 0
+                    self.ctrl["CIPHER_MODE"] = 0
+                    self.ctrl["ENC_MODE"] = 0
+                    self.ctrl["CTR_BIG_ENDIAN"] = 0
+                    self.aes_key = [0] * len(KEYMGR_REGS["AES"]["KEY"])
+                    self.key_start = 0
+                    self.counter = [0] * len(KEYMGR_REGS["AES"]["CTR"])
+                    self.gcm_h = [0] * len(KEYMGR_REGS["AES"]["GCM_H"])
+                    self.gcm_mac = [0] * len(KEYMGR_REGS["AES"]["GCM_MAC"])
+                    self.gcm_hash_in = [0] * len(KEYMGR_REGS["AES"]["GCM_HASH_IN"])
+                    self.ctrl["RESET"] = 0
+                    
+                    while not self.wfifo.empty():
+                        self.wfifo.get_nowait()
+                    while not self.rfifo.empty():
+                        self.rfifo.get_nowait()
+                    self.wfifo_empty = True
+                    self.rfifo_empty = True
+                    continue
+                
+                if self.gcm_do_acc:
+                    self._galois_multiply()
+                    self.gcm_do_acc = 0
+                
+                if self.key_start and self.ctrl["ENABLE"]:
+                    self.key_start = 0
+                
+                if self.ctrl["ENABLE"] and not self.ctrl["RESET"]:
+                    if self.ctrl["CIPHER_MODE"] == 1: # CTR
+                        while self.wfifo.qsize() >= 4:
+                            block_in = bytearray()
+                            for _ in range(4):
+                                block_in.extend(struct.pack("<I", self.wfifo.get()))
+                            
+                            if self.wfifo.qsize() == 0:
+                                self.wfifo_empty = True
+                            
+                            counter_bytes = bytearray()
+                            for i in range(4):
+                                counter_bytes.extend(struct.pack("<I", self.counter[i]))
+                            
+                            encrypted_counter = self._aes_block_encrypt(counter_bytes)
+                            
+                            block_out = bytearray()
+                            for i in range(16):
+                                block_out.append(block_in[i] ^ encrypted_counter[i])
+                            
+                            for i in range(4):
+                                word = struct.unpack("<I", block_out[i*4:(i+1)*4])[0]
+                                self.rfifo.put(word)
+                            self.rfifo_empty = False
+                            
+                            if self.ctrl["CTR_BIG_ENDIAN"]:
+                                carry = 1
+                                for i in range(3, -1, -1):
+                                    val = struct.unpack(">I", struct.pack("<I", self.counter[i]))[0]
+                                    val += carry
+                                    carry = 1 if val > 0xFFFFFFFF else 0
+                                    val &= 0xFFFFFFFF
+                                    self.counter[i] = struct.unpack("<I", struct.pack(">I", val))[0]
+                            else:
+                                self.counter[3] = (self.counter[3] + 1) & 0xFFFFFFFF
+                    
+                    elif self.ctrl["CIPHER_MODE"] in [0, 2]: # ECB or CBC
+                        if self.aes_cipher is None or self.counter_updated:
+                            key_words = {0: 4, 1: 6, 2: 8}[self.ctrl["KEYSIZE"]]
+                            key = bytearray()
+                            for i in range(key_words):
+                                key.extend(struct.pack("<I", self.aes_key[i]))
+                            
+                            if self.ctrl["CIPHER_MODE"] == 0: # ECB
+                                self.aes_cipher = domeAES.new(bytes(key), domeAES.MODE_ECB)
+                            else: # CBC
+                                iv = bytearray()
+                                for i in range(4):
+                                    iv.extend(struct.pack("<I", self.counter[i]))
+                                self.aes_cipher = domeAES.new(bytes(key), domeAES.MODE_CBC, bytes(iv))
+                            
+                            self.counter_updated = False
+                        
+                        while self.wfifo.qsize() >= 4:
+                            block = bytearray()
+                            for _ in range(4):
+                                block.extend(struct.pack("<I", self.wfifo.get()))
+                            
+                            if self.wfifo.qsize() == 0:
+                                self.wfifo_empty = True
+                            
+                            if self.ctrl["ENC_MODE"] == 1: # encrypt
+                                result = self.aes_cipher.encrypt(bytes(block))
+                            else: # decrypt
+                                result = self.aes_cipher.decrypt(bytes(block))
+                            
+                            for i in range(4):
+                                word = struct.unpack("<I", result[i*4:(i+1)*4])[0]
+                                self.rfifo.put(word)
+                            self.rfifo_empty = False
+                    
+                    if self.wfifo.qsize() == 0:
+                        self.wfifo_empty = True
+
+            except Exception as e:
+                prints.fatal(e)
+
+    def start_worker(self):
+        if not self.opthread:
+            self.opthread = threading.Thread(target=self.aes_worker)
+            self.opthread.daemon = True
+            self.opthread.start()
+
+    def queue_read_worker_op(self, size: int, target_fn):
+        retqueue = queue.Queue()
+        self.opqueue.put([target_fn, (size, retqueue)])
+        self.opqueue.join()
+        return retqueue.get_nowait()
+        
+    def queue_write_worker_op(self, size: int, value: int, target_fn):
+        self.opqueue.put([target_fn, (size, value)])
+
+    def _galois_multiply(self):
+        mac = bytearray()
+        for i in range(4):
+            mac.extend(struct.pack(">I", self.gcm_mac[i]))
+        
+        hash_in = bytearray()
+        for i in range(4):
+            hash_in.extend(struct.pack(">I", self.gcm_hash_in[i]))
+        
+        h = bytearray()
+        for i in range(4):
+            h.extend(struct.pack(">I", self.gcm_h[i]))
+        
+        for i in range(16):
+            mac[i] ^= hash_in[i]
+        
+        result = bytearray(16)
+        for i in range(128):
+            if mac[i // 8] & (0x80 >> (i % 8)):
+                for j in range(16):
+                    result[j] ^= h[j]
+            
+            carry = 0
+            for j in range(16):
+                new_carry = h[j] & 1
+                h[j] = (h[j] >> 1) | (carry << 7)
+                carry = new_carry
+            
+            if carry:
+                h[0] ^= 0xE1
+        
+        for i in range(4):
+            self.gcm_mac[i] = struct.unpack(">I", result[i*4:(i+1)*4])[0]
+
+    def _aes_block_encrypt(self, block_bytes):
+        key_words = {0: 4, 1: 6, 2: 8}[self.ctrl["KEYSIZE"]]
+        key = bytearray()
+        for i in range(key_words):
+            key.extend(struct.pack("<I", self.aes_key[i]))
+        
+        cipher = domeAES.new(bytes(key), domeAES.MODE_ECB)
+        return cipher.encrypt(bytes(block_bytes))
+    
+    def read_ctrl(self, size: int, queue: queue.Queue):
+        val = (self.ctrl["RESET"] << 0) | \
+                (self.ctrl["KEYSIZE"] << 1) | \
+                (self.ctrl["CIPHER_MODE"] << 3) | \
+                (self.ctrl["ENC_MODE"] << 5) | \
+                (self.ctrl["CTR_BIG_ENDIAN"] << 6) | \
+                (self.ctrl["ENABLE"] << 7)
+        queue.put(self.val)
+    
+    def write_ctrl(self, size: int, value: int):
+        self.ctrl["RESET"] = (value >> 0) & 1
+        self.ctrl["KEYSIZE"] = (value >> 1) & 0x3
+        self.ctrl["CIPHER_MODE"] = (value >> 3) & 0x3
+        self.ctrl["ENC_MODE"] = (value >> 5) & 1
+        self.ctrl["CTR_BIG_ENDIAN"] = (value >> 6) & 1
+        self.ctrl["ENABLE"] = (value >> 7) & 1
+
+    def read_wfifo(self, size: int, queue: queue.Queue):
+        queue.put(0)
+    
+    def write_wfifo(self, size: int, value: int):
+        self.wfifo.put(value, block=False)
+        self.wfifo_empty = False
+
+    def read_rfifo(self, size: int, queue: queue.Queue):
+        try:
+            val = self.rfifo.get_nowait()
+            if self.rfifo.qsize() == 0:
+                self.rfifo_empty = True
+        except:
+            val = 0
+
+        queue.put(val)
+    
+    def write_rfifo(self, size: int, value: int):
+        return
+    
+    def read_key(self, size: int, queue: queue.Queue, index: int):
+        queue.put(self.aes_key[index])
+    
+    def write_key(self, size: int, value: int, index: int):
+        self.aes_key[index] = value
+
+    def read_ctr(self, size: int, queue: queue.Queue, index: int):
+        queue.put(self.counter[index])
+    
+    def write_ctr(self, size: int, value: int, index: int):
+        self.counter[index] = value
+        self.counter_updated = True
+
+    def read_key_start(self, size: int, queue: queue.Queue):
+        queue.put(self.key_start)
+    
+    def write_key_start(self, size: int, value: int):
+        self.key_start = value & 1
+
+    def read_rand_stall(self, size: int, queue: queue.Queue):
+        queue.put(self.rand_stall)
+    
+    def write_rand_stall(self, size: int, value: int):
+        self.rand_stall = value
+
+    def read_wfifo_level(self, size: int, queue: queue.Queue):
+        queue.put(self.wfifo.qsize())
+
+    def write_wfifo_level(self, size: int, value: int):
+        return
+    
+    def read_wfifo_full(self, size: int, queue: queue.Queue):
+        if self.wfifo.qsize() >= 16:
+            queue.put(1)
+        else:
+            queue.put(0)
+
+    def write_wfifo_full(self, size: int, value: int):
+        return
+    
+    def read_rfifo_level(self, size: int, queue: queue.Queue):
+        queue.put(self.rfifo.qsize())
+
+    def write_rfifo_level(self, size: int, value: int):
+        return
+    
+    def read_rfifo_empty(self, size: int, queue: queue.Queue):
+        queue.put(int(self.rfifo_empty))
+
+    def write_rfifo_empty(self, size: int, value: int):
+        return
+    
+    def read_gcm_do_acc(self, size: int, queue: queue.Queue):
+        queue.put(self.gcm_do_acc)
+
+    def write_gcm_do_acc(self, size: int, value: int):
+        self.gcm_do_acc = value & 1
+
+    def read_gcm_h(self, size: int, queue: queue.Queue, index: int):
+        queue.put(self.gcm_h[index])
+    
+    def write_gcm_h(self, size: int, value: int, index: int):
+        self.gcm_h[index] = value
+
+    def read_gcm_mac(self, size: int, queue: queue.Queue, index: int):
+        queue.put(self.gcm_mac[index])
+    
+    def write_gcm_mac(self, size: int, value: int, index: int):
+        self.gcm_mac[index] = value
+
+    def read_gcm_hash_in(self, size: int, queue: queue.Queue, index: int):
+        queue.put(self.gcm_hash_in[index])
+    
+    def write_gcm_hash_in(self, size: int, value: int, index: int):
+        self.gcm_hash_in[index] = value
+
+    def read_wipe_secrets(self, size: int, queue: queue.Queue):
+        queue.put(0)
+
+    def write_wipe_secrets(self, size: int, value: int):
+        if value:
+            self.ctrl["RESET"] = 1
+
+    def read_use_hidden_key(self, size: int, queue: queue.Queue) -> None:
+        queue.put(self.use_hidden_key)
+
+    def write_use_hidden_key(self, size: int, value: int) -> None:
+        self.use_hidden_key = value
+
 class KeymgrController:
     def __init__(self):
         self.mutex = FifoLock() # Only use this for KeyManager specific ops.
         self.shaengine = ShaEngine()
-        self.aesengine = None
+        self.aesengine = AesEngine()
 
         self.cert_revoke_ctrl = [
             0xa8028a82, 0xaaaaaaaa, 0xaaaa
@@ -345,6 +694,7 @@ class KeymgrController:
         self.rwr_lock = 0
 
         self.shaengine.start_worker()
+        self.aesengine.start_worker()
 
     def read_hkey_rwr(self, size: int, index: int) -> None:
         with self.mutex:
@@ -549,6 +899,90 @@ for k, v in _SHAENGINE_FUNC_MAP.items():
     _REG_FUNC_MAP[k] = [
         args_lambda_gen(c_emu.shaengine.queue_read_worker_op, v[0]),
         args_lambda_gen(c_emu.shaengine.queue_write_worker_op, v[1])
+    ]
+
+_AESENGINE_FUNC_MAP = {
+    KEYMGR_REGS["AES"]["CTRL"]: [
+        c_emu.aesengine.read_ctrl,
+        c_emu.aesengine.write_ctrl
+    ],
+    KEYMGR_REGS["AES"]["WFIFO_DATA"]: [
+        c_emu.aesengine.read_wfifo,
+        c_emu.aesengine.write_wfifo
+    ],
+    KEYMGR_REGS["AES"]["RFIFO_DATA"]: [
+        c_emu.aesengine.read_rfifo,
+        c_emu.aesengine.write_rfifo
+    ],
+    KEYMGR_REGS["AES"]["KEY_START"]: [
+        c_emu.aesengine.read_key_start,
+        c_emu.aesengine.write_key_start
+    ],
+    KEYMGR_REGS["AES"]["RAND_STALL_CTL"]: [
+        c_emu.aesengine.read_rand_stall,
+        c_emu.aesengine.write_rand_stall
+    ],
+    KEYMGR_REGS["AES"]["WFIFO_LEVEL"]: [
+        c_emu.aesengine.read_wfifo_level,
+        c_emu.aesengine.write_wfifo_level
+    ],
+    KEYMGR_REGS["AES"]["WFIFO_FULL"]: [
+        c_emu.aesengine.read_wfifo_full,
+        c_emu.aesengine.write_wfifo_full
+    ],
+    KEYMGR_REGS["AES"]["RFIFO_LEVEL"]: [
+        c_emu.aesengine.read_rfifo_level,
+        c_emu.aesengine.write_rfifo_level
+    ],
+    KEYMGR_REGS["AES"]["RFIFO_EMPTY"]: [
+        c_emu.aesengine.read_rfifo_empty,
+        c_emu.aesengine.write_rfifo_empty
+    ],
+    KEYMGR_REGS["AES"]["GCM_DO_ACC"]: [
+        c_emu.aesengine.read_gcm_do_acc,
+        c_emu.aesengine.write_gcm_do_acc
+    ],
+    KEYMGR_REGS["AES"]["WIPE_SECRETS"]: [
+        c_emu.aesengine.read_wipe_secrets,
+        c_emu.aesengine.write_wipe_secrets
+    ],
+    KEYMGR_REGS["AES"]["USE_HIDDEN_KEY"]: [
+        c_emu.aesengine.read_use_hidden_key,
+        c_emu.aesengine.write_use_hidden_key
+    ],   
+}
+
+idx_regs_to_regmap(
+    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["KEY"],
+    c_emu.aesengine.read_key, c_emu.aesengine.write_key
+)
+
+idx_regs_to_regmap(
+    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["CTR"],
+    c_emu.aesengine.read_ctr, c_emu.aesengine.write_ctr
+)
+
+
+idx_regs_to_regmap(
+    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["GCM_H"],
+    c_emu.aesengine.read_gcm_h, c_emu.aesengine.write_gcm_h
+)
+
+idx_regs_to_regmap(
+    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["GCM_MAC"],
+    c_emu.aesengine.read_gcm_mac, c_emu.aesengine.write_gcm_mac
+)
+
+idx_regs_to_regmap(
+    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["GCM_HASH_IN"],
+    c_emu.aesengine.read_gcm_hash_in, c_emu.aesengine.write_gcm_hash_in
+)
+
+
+for k, v in _AESENGINE_FUNC_MAP.items():
+    _REG_FUNC_MAP[k] = [
+        args_lambda_gen(c_emu.aesengine.queue_read_worker_op, v[0]),
+        args_lambda_gen(c_emu.aesengine.queue_write_worker_op, v[1])
     ]
 
 def component_read_handler(

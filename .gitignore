@@ -5,3 +5,5 @@ __pycache__/
 
 # MacOS artifacts
 .DS_Store
+
+pc.txt

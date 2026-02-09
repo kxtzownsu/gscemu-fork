@@ -53,11 +53,6 @@ REG_DEFS = {
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "TRNG0": { # Unimplemented
-        "base_addr": 0x40410000,
-        "size": DEFAULT_REG_WIDTH,
-    },
-
     "RDD0": { # Unimplemented
         "base_addr": 0x40440000,
         "size": DEFAULT_REG_WIDTH,
@@ -112,6 +107,11 @@ MMIO_REG_DEFS = {
 
     "USB0": {
         "base_addr": 0x40300000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "TRNG0": {
+        "base_addr": 0x40410000,
         "size": DEFAULT_REG_WIDTH,
     },
 
@@ -341,6 +341,28 @@ KEYMGR_REGS = {
         "EXECUTE_COUNT_STATE": 0x4a0, # Unused, unimplemented
         "EXECUTE_COUNT_MAX": 0x4a4, # Unused, unimplemented
     },
+
+    "AES": {
+        "CTRL": 0x0,
+        "WFIFO_DATA": 0x8,
+        "RFIFO_DATA": 0xc,
+        "KEY": _reg_list(0x2c, 8),
+        "KEY_START": 0x4c,
+        "CTR": _reg_list(0x50, 4),
+        "RAND_STALL_CTL": 0x60,
+        "WFIFO_LEVEL": 0x64,
+        "WFIFO_FULL": 0x68,
+        "RFIFO_LEVEL": 0x6c,
+        "RFIFO_EMPTY": 0x70,
+
+        "GCM_DO_ACC": 0x7c,
+        "GCM_H": _reg_list(0x80, 4),
+        "GCM_MAC": _reg_list(0x90, 4),
+        "GCM_HASH_IN": _reg_list(0xa0, 4),
+
+        "WIPE_SECRETS": 0xb0,
+        "USE_HIDDEN_KEY": 0xc0,
+    },
 }
 
 FLASH_REGS = {
@@ -396,4 +418,28 @@ USB_REGS = {
 
 GPIO_REGS = {
     "DATAIN": 0x0,
+}
+
+TRNG_REGS = {
+    "SECURE_POST_PROCESSING_CTRL": 0x10,
+    "POST_PROCESSING_CTRL": 0x14,
+    "LDO_CTRL": 0x48,
+    "ANALOG_CTRL": 0x64,
+
+    "ALLOWED_VALUES": 0x30,
+    "SLICE_MAX_UPPER_LIMIT": 0x38, 
+    "SLICE_MIN_LOWER_LIMIT": 0x3c,
+
+    "POWER_DOWN_B": 0x4c,
+    "GO_EVENT": 0x18,
+    "STOP_WORK": 0x28,
+
+    "READ_DATA": 0x70,
+    "EMPTY": 0x7c,
+
+    "TIMEOUT_COUNTER": 0x1c,
+    "TIMEOUT_MAX_TRY_NUM": 0x20,
+    
+    "FSM_STATE": 0x2c,
+    "OUTPUT_TIME_COUNTER": 0x24,
 }

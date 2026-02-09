@@ -71,7 +71,8 @@ c_emu_1.start_worker()
 c_emu_0.datain_manual_write(6)
 
 # Assert GPIO_I2CP_SDA to signal that the I2C bus is idle, else the console
-# gets spammed.
+# gets spammed. Once we implement strap config, we will use SPI, so this is only
+# temporal(maybe).
 c_emu_0.queue_write_datain_manual(14)
 
 # Assert GPIO_TPM_RST_L to signal that the AP is on.
