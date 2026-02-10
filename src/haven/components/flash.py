@@ -161,18 +161,29 @@ class FlashController:
             return
         
         # Check if our TRANS_OFFSET is within bounds.
-        self.start_addr = self.start_addr + (self.trans_offset * 4)
-        if self.start_addr > _FSH_SIZE_BOUNDS[self.trans_mainb]:
+        if (((self.trans_offset * 4) + 0x7ff) 
+                > _FSH_SIZE_BOUNDS[self.trans_mainb]):
             if self.trans_mainb == 0:
                 self.error_code |= 2 # BIT(1), out_of_main_range
             elif self.trans_mainb == 1:
                 self.error_code |= 4 # BIT(2), out_of_info_range
             return
         
+        self.start_addr = self.start_addr + (self.trans_offset * 4)
+        
         # All checks passed, start OP_ERASE.
         ucmutex().mem_write(self.start_addr, b'\xff' * 0x800)
 
     def op_write_block(self):
+        # Check if our TRANS_OFFSET is within bounds.
+        if (((self.trans_offset * 4) + (((self.trans_size + 1) * 4)) - 1) 
+                > _FSH_SIZE_BOUNDS[self.trans_mainb]):
+            if self.trans_mainb == 0:
+                self.error_code |= 2 # BIT(1), out_of_main_range
+            elif self.trans_mainb == 1:
+                self.error_code |= 4 # BIT(2), out_of_info_range
+            return
+
         # Every write must be aligned to the row boundary.
         if (
             (self.trans_offset // 64) != 
@@ -180,6 +191,7 @@ class FlashController:
         ):
             # Write was not aligned to row boundary!
             self.error_code |= 1 # BIT(0), prog_not_row_aligned
+            return
 
         self.start_addr = self.start_addr + (self.trans_offset * 4)
 
@@ -191,11 +203,20 @@ class FlashController:
                 self.wr_data[word]
             )
 
-    def op_read_block(self):
+    def op_read_block(self):        
         # We need to ensure the system is only asking for one u32. Anything more
         # or less is invalid.
         if self.trans_size != 1:
             self.error_code |= 8192 # BIT(13), access_invalid_flash0
+            return
+        
+        # Check if our TRANS_OFFSET is within bounds.
+        if (((self.trans_offset * 4) + 0x3) 
+                > _FSH_SIZE_BOUNDS[self.trans_mainb]):
+            if self.trans_mainb == 0:
+                self.error_code |= 2 # BIT(1), out_of_main_range
+            elif self.trans_mainb == 1:
+                self.error_code |= 4 # BIT(2), out_of_info_range
             return
         
         self.start_addr = self.start_addr + (self.trans_offset * 4)
@@ -236,8 +257,6 @@ class FlashController:
     def error_countdown(self):
         # If we have an error code, we need to start the countdown.
         if self.error_code:
-            if self.error_placed_time:
-                return
             self.error_placed_time = time.perf_counter()
 
     def read_pe_control_0(self, size: int, queue: queue.Queue) -> None:
