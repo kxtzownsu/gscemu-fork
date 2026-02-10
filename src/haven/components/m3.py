@@ -218,16 +218,16 @@ class ArmInterruptHandler:
             pending_exceptions[1] = self.nvic_sys_pri[1]
 
         # FAULTMASK is set, all exceptions disabled NMI and Reset.
-        # if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_FAULTMASK):
-        #     return
+        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_FAULTMASK):
+            return
         
         # HardFault
         if self.nvic_sys_pend[2]:
             pending_exceptions[2] = self.nvic_sys_pri[2]
         
         # PRIMASK is set, only allow Reset/NMI/HardFault.
-        # if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PRIMASK):
-        #     return
+        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PRIMASK):
+            return
         
         for exc in range(len(self.nvic_sys_pend)):
             if not self.nvic_sys_pend[exc]:
