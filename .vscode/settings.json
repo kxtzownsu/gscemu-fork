@@ -4,4 +4,5 @@
     // turn off some useless python features that are annoying.
     "python.REPL.enableREPLSmartSend": false, 
     "python.analysis.supportDocstringTemplate": false,
+    "python.terminal.activateEnvironment": false,
 }

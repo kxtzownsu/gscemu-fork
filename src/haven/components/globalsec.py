@@ -309,6 +309,9 @@ class HavenGlobalsec:
     def write_sig_unlock(self, size: int, value: int) -> None:
         with self.mutex:
             # System has requested for execution unlock. Verify SB_BL_SIG.
+            if GSCEMULATOR_FORCE_SB_COMP_STATUS:
+                self.sb_comp_status = True
+                return
 
             if self.sb_bl_sig == _EXPECTED_SB_BL_SIG:
                 self.sb_comp_status = True

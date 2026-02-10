@@ -16,6 +16,9 @@ GSCEMULATOR_FW_PATHS = {
 }
 GSCEMULATOR_FW_STRICT_SIZE_CHECKING = False
 
+# Always force SB_COMP_STATUS to True within GLOBALSEC
+GSCEMULATOR_FORCE_SB_COMP_STATUS = False
+
 GSCEMULATOR_PC_LOGGING_SETTINGS = {
     "log_pc": False,
     "log_file_path": "./pc.txt",
