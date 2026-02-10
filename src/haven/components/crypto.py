@@ -66,6 +66,12 @@ class CryptoAccelerator:
                     self.control_process()
 
                 if self.host_cmd:
+                    if GSCEMULATOR_DISABLE_CRYPTO_ENGINE:
+                        time.sleep(0.01)
+                        pend_external_irq(4)
+                        self.host_cmd = 0
+                        continue
+                    
                     # A hack for now to ensure emulation has continued before
                     # we pull the IRQ pend. Our emulator is running too fast!
                     time.sleep(0.05)
