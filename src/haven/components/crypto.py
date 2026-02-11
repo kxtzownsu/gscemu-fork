@@ -60,8 +60,6 @@ class CryptoAccelerator:
 
                 target_fn(*args)
 
-                self.opqueue.task_done()
-
                 if self.control:
                     self.control_process()
 
@@ -71,10 +69,6 @@ class CryptoAccelerator:
                         pend_external_irq(4)
                         self.host_cmd = 0
                         continue
-                    
-                    # A hack for now to ensure emulation has continued before
-                    # we pull the IRQ pend. Our emulator is running too fast!
-                    time.sleep(0.05)
                     
                     component_stop_timer_debug()
                     if self.crypto_emulator is None:
@@ -109,6 +103,8 @@ class CryptoAccelerator:
                     component_start_timer_debug()
                     
                     pend_external_irq(4)
+
+                self.opqueue.task_done()
 
             except Exception as e:
                 prints.fatal(e)
