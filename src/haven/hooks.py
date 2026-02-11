@@ -15,7 +15,11 @@ from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 
-from .components.m3 import pend_svcall_interrupt, exc_return_handler
+from .components.m3 import (
+    pend_svcall_interrupt,
+    exc_return_handler,
+    handle_externally_pended_interrupts,
+)
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -72,6 +76,15 @@ def handle_wfi_instruction(
         qemu.arm_const.UC_ARM_REG_PC, 
         (ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC) + 2) | 1
     )
+    return True
+
+def m3_interrupt_safe_point(
+    uc: qemu.Uc,
+    address: int,
+    size: int,
+    user_data: typing.Any,
+) -> bool:
+    handle_externally_pended_interrupts()
     return True
 
 def pc_logger(

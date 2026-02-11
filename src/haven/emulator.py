@@ -93,6 +93,21 @@ class Emulator:
         # this with the M3 in the future. MemManage intr?
         g_uc().hook_add(UNICORN_MEM_INVALID_HOOKS, hooks.mem_invalid_access)
 
+        # On an external interrupt, we shouldn't just branch to the interrupt
+        # directly. We need to wait until we are in a defined emulator state.
+        # Using UC_HOOK_BLOCK fixes this, although now external interrupts can 
+        # only occur on a UC_HOOK_BLOCK.
+        #
+        # Interrupting on an external interrupt directly while in an undefined
+        # emulator state may cause emu_stop/emu_start on MMIO_MAP callback,
+        # which is very dangerous. It is impossible to determine if we have 
+        # returned from an MMIO_MAP callback, or if we are still in an MMIO_MAP 
+        # callback.
+        #
+        # Albeit slow, this is the only way to fix the issue at this current
+        # point in time.
+        g_uc().hook_add(qemu.UC_HOOK_BLOCK, hooks.m3_interrupt_safe_point)
+
         # We need to manually handle the wfi instruction as our interrupt
         # handler is here.
         g_uc().hook_add(
