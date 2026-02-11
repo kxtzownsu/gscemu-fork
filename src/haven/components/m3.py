@@ -175,6 +175,22 @@ class ArmInterruptHandler:
             self.nvic_pend[irq] = True
         self.external_interrupt_pending.set()
 
+    def wait_for_interrupt(self) -> None:
+        """
+        The only thing that can wake the M3 up from sleep is an external
+        interrupt that starts to pend. Therefore, wait until
+        external_interrupt_pending is set.
+        """
+        self.external_interrupt_pending.wait()
+        self.external_interrupt_pending.clear()
+        
+        self.intr_queue.put([
+            None,
+            True, # increment_pc
+            tuple()
+        ])
+        self.intr_queue.join()
+
     def exc_return_callback(self) -> None:
         address = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC) | 1
         if address == _EXC_RETURN_VALS[0] or address == _EXC_RETURN_VALS[1]:
@@ -599,6 +615,9 @@ def pend_svcall_interrupt() -> None:
 
 def handle_externally_pended_interrupts() -> None:
     c_emu.intr_op.handle_externally_pended_interrupts()
+
+def wait_for_interrupt() -> None:
+    c_emu.intr_op.wait_for_interrupt()
 
 def component_read_handler(
     uc: qemu.Uc,

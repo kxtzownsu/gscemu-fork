@@ -19,6 +19,7 @@ from .components.m3 import (
     pend_svcall_interrupt,
     exc_return_handler,
     handle_externally_pended_interrupts,
+    wait_for_interrupt,
 )
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
@@ -67,15 +68,7 @@ def handle_wfi_instruction(
     uc: qemu.Uc,
     user_data: typing.Any,
 ):
-    # TODO(appleflyer): 
-    # In the future, this should wait until there's an interrupt pending.
-    # Just dont do anything for now :P
-
-    # Increment the PC past the wfi instruction.
-    ucmutex().reg_write(
-        qemu.arm_const.UC_ARM_REG_PC, 
-        (ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC) + 2) | 1
-    )
+    wait_for_interrupt()
     return True
 
 def m3_interrupt_safe_point(
