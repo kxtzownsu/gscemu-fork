@@ -188,7 +188,6 @@ class ShaEngine:
             case 0: # SHA256
                 engine = hashlib.sha256(self.input_fifo)
             case 2: # SHA1
-                print("sha1 op",len(self.input_fifo))
                 engine = hashlib.sha1(self.input_fifo)
             case 32: # SHA256 + HMAC
                 derived_hmac_key = bytearray()
@@ -206,8 +205,6 @@ class ShaEngine:
         digest = engine.digest()
         for i in range(8):
             self.sts_h[i] = int.from_bytes(digest[i*4:(i+1)*4], 'little')
-            if engine_settings == 2:
-                print(hex(self.sts_h[i]))
 
         if self.en & 65536: # BIT(16)
             self.itop = 1
