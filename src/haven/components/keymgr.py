@@ -142,10 +142,15 @@ class ShaEngine:
                 self.itop = 0
                 self.msglen_lo = 0
                 self.msglen_hi = 0
+                self.msglen_full = 0
                 self.en = 0
                 self.wr_en = 0
                 self.input_fifo = bytearray()
                 self.sts_h = [0] * 8
+
+                self.use_cert["ENABLE"] = 0
+                self.use_cert["INDEX"] = 0
+                self.use_cert["CHECK_ONLY"] = 0
 
                 self.trig &= ~2 # Clear the TRIG bit
 
@@ -183,6 +188,7 @@ class ShaEngine:
             case 0: # SHA256
                 engine = hashlib.sha256(self.input_fifo)
             case 2: # SHA1
+                print("sha1 op",len(self.input_fifo))
                 engine = hashlib.sha1(self.input_fifo)
             case 32: # SHA256 + HMAC
                 derived_hmac_key = bytearray()
@@ -200,6 +206,8 @@ class ShaEngine:
         digest = engine.digest()
         for i in range(8):
             self.sts_h[i] = int.from_bytes(digest[i*4:(i+1)*4], 'little')
+            if engine_settings == 2:
+                print(hex(self.sts_h[i]))
 
         if self.en & 65536: # BIT(16)
             self.itop = 1
@@ -389,6 +397,7 @@ class AesEngine:
                     self.ctrl["CTR_BIG_ENDIAN"] = 0
                     self.aes_key = [0] * len(KEYMGR_REGS["AES"]["KEY"])
                     self.key_start = 0
+                    self.use_hidden_key = 0
                     self.counter = [0] * len(KEYMGR_REGS["AES"]["CTR"])
                     self.gcm_h = [0] * len(KEYMGR_REGS["AES"]["GCM_H"])
                     self.gcm_mac = [0] * len(KEYMGR_REGS["AES"]["GCM_MAC"])
@@ -448,10 +457,7 @@ class AesEngine:
                     
                     elif self.ctrl["CIPHER_MODE"] in [0, 2]: # ECB or CBC
                         if self.aes_cipher is None or self.counter_updated:
-                            key_words = {0: 4, 1: 6, 2: 8}[self.ctrl["KEYSIZE"]]
-                            key = bytearray()
-                            for i in range(key_words):
-                                key.extend(struct.pack("<I", self.aes_key[i]))
+                            key = self._get_key_bytes()
                             
                             if self.ctrl["CIPHER_MODE"] == 0: # ECB
                                 self.aes_cipher = domeAES.new(bytes(key), domeAES.MODE_ECB)
@@ -536,13 +542,29 @@ class AesEngine:
         for i in range(4):
             self.gcm_mac[i] = struct.unpack(">I", result[i*4:(i+1)*4])[0]
 
-    def _aes_block_encrypt(self, block_bytes):
-        key_words = {0: 4, 1: 6, 2: 8}[self.ctrl["KEYSIZE"]]
+    def _get_key_bytes(self):
+        key_words = {
+            0: 4, 
+            1: 6, 
+            2: 8
+        }[self.ctrl["KEYSIZE"]]
+        if self.use_hidden_key & 0x400:  # ENABLE bit
+            # The AES engine implements a HIDDEN_KEY mode, where it uses a
+            # key within KEYMGR instead of the key in the KEY registers.
+            # We need to return a special key, not just use a key in the KEY
+            # register as other ops may clobber it, causing the app_cipher to
+            # be invalidated. We shall just return an empty bytes array of the
+            # requested keysize here.
+            return bytes(key_words * 4)
+        
         key = bytearray()
         for i in range(key_words):
             key.extend(struct.pack("<I", self.aes_key[i]))
-        
-        cipher = domeAES.new(bytes(key), domeAES.MODE_ECB)
+        return bytes(key)
+
+    def _aes_block_encrypt(self, block_bytes):
+        key = self._get_key_bytes()
+        cipher = domeAES.new(key, domeAES.MODE_ECB)
         return cipher.encrypt(bytes(block_bytes))
     
     def read_ctrl(self, size: int, queue: queue.Queue):
@@ -552,7 +574,7 @@ class AesEngine:
                 (self.ctrl["ENC_MODE"] << 5) | \
                 (self.ctrl["CTR_BIG_ENDIAN"] << 6) | \
                 (self.ctrl["ENABLE"] << 7)
-        queue.put(self.val)
+        queue.put(val)
     
     def write_ctrl(self, size: int, value: int):
         self.ctrl["RESET"] = (value >> 0) & 1
@@ -718,13 +740,13 @@ class KeymgrController:
 
     def read_hkey_frr(self, size: int, index: int) -> None:
         with self.mutex:
-            return self.hkey_fwr[index]
+            return self.hkey_frr[index]
 
     def write_hkey_frr(
         self, size: int, value: int, index: int
     ) -> None:
         with self.mutex:
-            self.hkey_fwr[index] = value
+            return
 
     def read_fw_major_version(self, size: int) -> None:
         with self.mutex:

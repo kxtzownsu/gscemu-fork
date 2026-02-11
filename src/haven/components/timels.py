@@ -375,6 +375,9 @@ def component_stop_timer_debug() -> None:
                 current_value = c_emu._compute_value_internal(timer)
                 timer.start_value = current_value
                 timer.running = False
+                timer._debug_paused = True
+            else:
+                timer._debug_paused = False
 
     c_emu.watchdog_check.set()
 
@@ -382,11 +385,11 @@ def component_stop_timer_debug() -> None:
 def component_start_timer_debug() -> None:
     with c_emu.timer_lock:
         for timer in c_emu.timers:
-            if timer.start_value == 0 and timer.load:
-                timer.start_value = timer.load
-
-            if not timer.running and timer.start_value != 0:
+            if getattr(timer, '_debug_paused', False):
+                if timer.start_value == 0 and timer.load:
+                    timer.start_value = timer.load
                 timer.start_time_ns = time.monotonic_ns()
                 timer.running = True
+                timer._debug_paused = False
 
     c_emu.watchdog_check.set()

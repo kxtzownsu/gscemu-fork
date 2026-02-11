@@ -75,7 +75,7 @@ class Emulator:
             prints.fatal("Failed to map memory during init process!")
             return
         
-        prepare_info1_space()
+        prepare_flash_space()
 
         if not load_firmware(
                 REG_DEFS, 

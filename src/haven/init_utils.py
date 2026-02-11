@@ -71,8 +71,13 @@ def map_memory(qemu_mem_map_list: dict, mmio_mem_map_list: dict) -> bool:
     
     return True
 
-def prepare_info1_space() -> None:
-    """We need to fill the INFO1 space with 0xFF every initialization."""
+def prepare_flash_space() -> None:
+    """We need to fill the entire flash space with 0xFF every initialization."""
+    g_uc().mem_write(
+        REG_DEFS["FLASH_PROG"]["base_addr"], 
+        (b'\xff' * REG_DEFS["FLASH_PROG"]["size"])
+    )
+    
     g_uc().mem_write(
         REG_DEFS["INFO1"]["base_addr"], 
         (b'\xff' * REG_DEFS["INFO1"]["size"])
