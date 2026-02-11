@@ -354,14 +354,14 @@ class AesEngine:
         }
 
         self.key_start = 0
-        self.aes_key = [0] * len(KEYMGR_REGS["AES"]["KEY"])
+        self.aes_key = [0] * 8
         
-        self.counter = [0] * len(KEYMGR_REGS["AES"]["CTR"])
+        self.counter = [0] * 4
         self.counter_updated = False
         
-        self.gcm_h = [0] * len(KEYMGR_REGS["AES"]["GCM_H"])
-        self.gcm_mac = [0] * len(KEYMGR_REGS["AES"]["GCM_MAC"])
-        self.gcm_hash_in = [0] * len(KEYMGR_REGS["AES"]["GCM_HASH_IN"])
+        self.gcm_h = [0] * 4
+        self.gcm_mac = [0] * 4
+        self.gcm_hash_in = [0] * 4
         self.gcm_do_acc = 0
         
         self.rand_stall = 0
@@ -392,13 +392,13 @@ class AesEngine:
                     self.ctrl["CIPHER_MODE"] = 0
                     self.ctrl["ENC_MODE"] = 0
                     self.ctrl["CTR_BIG_ENDIAN"] = 0
-                    self.aes_key = [0] * len(KEYMGR_REGS["AES"]["KEY"])
+                    self.aes_key = [0] * 8
                     self.key_start = 0
                     self.use_hidden_key = 0
-                    self.counter = [0] * len(KEYMGR_REGS["AES"]["CTR"])
-                    self.gcm_h = [0] * len(KEYMGR_REGS["AES"]["GCM_H"])
-                    self.gcm_mac = [0] * len(KEYMGR_REGS["AES"]["GCM_MAC"])
-                    self.gcm_hash_in = [0] * len(KEYMGR_REGS["AES"]["GCM_HASH_IN"])
+                    self.counter = [0] * 4
+                    self.gcm_h = [0] * 4
+                    self.gcm_mac = [0] * 4
+                    self.gcm_hash_in = [0] * 4
                     self.ctrl["RESET"] = 0
                     
                     while not self.wfifo.empty():
@@ -416,76 +416,105 @@ class AesEngine:
                 if self.key_start and self.ctrl["ENABLE"]:
                     self.key_start = 0
                 
-                if self.ctrl["ENABLE"] and not self.ctrl["RESET"]:
-                    if self.ctrl["CIPHER_MODE"] == 1: # CTR
-                        while self.wfifo.qsize() >= 4:
-                            block_in = bytearray()
-                            for _ in range(4):
-                                block_in.extend(struct.pack("<I", self.wfifo.get()))
-                            
-                            if self.wfifo.qsize() == 0:
-                                self.wfifo_empty = True
-                            
-                            counter_bytes = bytearray()
-                            for i in range(4):
-                                counter_bytes.extend(struct.pack("<I", self.counter[i]))
-                            
-                            encrypted_counter = self._aes_block_encrypt(counter_bytes)
-                            
-                            block_out = bytearray()
-                            for i in range(16):
-                                block_out.append(block_in[i] ^ encrypted_counter[i])
-                            
-                            for i in range(4):
-                                word = struct.unpack("<I", block_out[i*4:(i+1)*4])[0]
-                                self.rfifo.put(word)
-                            self.rfifo_empty = False
-                            
-                            if self.ctrl["CTR_BIG_ENDIAN"]:
-                                carry = 1
-                                for i in range(3, -1, -1):
-                                    val = struct.unpack(">I", struct.pack("<I", self.counter[i]))[0]
-                                    val += carry
-                                    carry = 1 if val > 0xFFFFFFFF else 0
-                                    val &= 0xFFFFFFFF
-                                    self.counter[i] = struct.unpack("<I", struct.pack(">I", val))[0]
-                            else:
-                                self.counter[3] = (self.counter[3] + 1) & 0xFFFFFFFF
-                    
-                    elif self.ctrl["CIPHER_MODE"] in [0, 2]: # ECB or CBC
-                        if self.aes_cipher is None or self.counter_updated:
-                            key = self._get_key_bytes()
-                            
-                            if self.ctrl["CIPHER_MODE"] == 0: # ECB
-                                self.aes_cipher = domeAES.new(bytes(key), domeAES.MODE_ECB)
-                            else: # CBC
-                                iv = bytearray()
-                                for i in range(4):
-                                    iv.extend(struct.pack("<I", self.counter[i]))
-                                self.aes_cipher = domeAES.new(bytes(key), domeAES.MODE_CBC, bytes(iv))
-                            
-                            self.counter_updated = False
+                if (not self.ctrl["ENABLE"]) or self.ctrl["RESET"]:
+                    continue
+                
+                if self.ctrl["CIPHER_MODE"] == 1: # CTR
+                    while self.wfifo.qsize() >= 4:
+                        block_in = bytearray()
+                        for _ in range(4):
+                            block_in.extend(
+                                struct.pack("<I", self.wfifo.get_nowait())
+                            )
                         
-                        while self.wfifo.qsize() >= 4:
-                            block = bytearray()
-                            for _ in range(4):
-                                block.extend(struct.pack("<I", self.wfifo.get()))
-                            
-                            if self.wfifo.qsize() == 0:
-                                self.wfifo_empty = True
-                            
-                            if self.ctrl["ENC_MODE"] == 1: # encrypt
-                                result = self.aes_cipher.encrypt(bytes(block))
-                            else: # decrypt
-                                result = self.aes_cipher.decrypt(bytes(block))
-                            
+                        if self.wfifo.qsize() == 0:
+                            self.wfifo_empty = True
+                        
+                        counter_bytes = bytearray()
+                        for i in range(4):
+                            counter_bytes.extend(
+                                struct.pack("<I", self.counter[i])
+                            )
+                        
+                        encrypted_counter = self._aes_block_encrypt(
+                            counter_bytes
+                        )
+                        
+                        block_out = bytearray()
+                        for i in range(16):
+                            block_out.append(
+                                block_in[i] ^ encrypted_counter[i]
+                            )
+                        
+                        for i in range(4):
+                            word = struct.unpack(
+                                "<I", block_out[i*4:(i+1)*4]
+                            )[0]
+                            self.rfifo.put(word)
+                        self.rfifo_empty = False
+                        
+                        if self.ctrl["CTR_BIG_ENDIAN"]:
+                            carry = 1
+                            for i in range(3, -1, -1):
+                                val = struct.unpack(
+                                    ">I", struct.pack("<I", self.counter[i])
+                                )[0]
+                                val += carry
+                                carry = 1 if val > 0xFFFFFFFF else 0
+                                val &= 0xFFFFFFFF
+                                self.counter[i] = struct.unpack(
+                                    "<I", struct.pack(">I", val)
+                                )[0]
+                        else:
+                            self.counter[3] = (
+                                (self.counter[3] + 1) 
+                                & 0xFFFFFFFF
+                            )
+                
+                elif self.ctrl["CIPHER_MODE"] in [0, 2]: # ECB or CBC
+                    if self.aes_cipher is None or self.counter_updated:
+                        key = self._get_key_bytes()
+                        
+                        if self.ctrl["CIPHER_MODE"] == 0: # ECB
+                            self.aes_cipher = domeAES.new(
+                                bytes(key), domeAES.MODE_ECB
+                            )
+                        else: # CBC
+                            iv = bytearray()
                             for i in range(4):
-                                word = struct.unpack("<I", result[i*4:(i+1)*4])[0]
-                                self.rfifo.put(word)
-                            self.rfifo_empty = False
+                                iv.extend(
+                                    struct.pack("<I", self.counter[i])
+                                )
+                            self.aes_cipher = domeAES.new(
+                                bytes(key), domeAES.MODE_CBC, bytes(iv)
+                            )
+                        
+                        self.counter_updated = False
                     
-                    if self.wfifo.qsize() == 0:
-                        self.wfifo_empty = True
+                    while self.wfifo.qsize() >= 4:
+                        block = bytearray()
+                        for _ in range(4):
+                            block.extend(
+                                struct.pack("<I", self.wfifo.get_nowait())
+                            )
+                        
+                        if self.wfifo.qsize() == 0:
+                            self.wfifo_empty = True
+                        
+                        if self.ctrl["ENC_MODE"] == 1: # encrypt
+                            result = self.aes_cipher.encrypt(bytes(block))
+                        else: # decrypt
+                            result = self.aes_cipher.decrypt(bytes(block))
+                        
+                        for i in range(4):
+                            word = struct.unpack(
+                                "<I", result[i*4:(i+1)*4]
+                            )[0]
+                            self.rfifo.put(word)
+                        self.rfifo_empty = False
+                
+                if self.wfifo.qsize() == 0:
+                    self.wfifo_empty = True
 
             except Exception as e:
                 prints.fatal(e)
