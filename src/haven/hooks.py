@@ -68,7 +68,14 @@ def handle_wfi_instruction(
     uc: qemu.Uc,
     user_data: typing.Any,
 ):
+    # Wait until an interrupt is externally pended from an external source.
     wait_for_interrupt()
+    
+    # Increment past the wfi instruction
+    ucmutex().reg_write(
+        qemu.arm_const.UC_ARM_REG_PC, 
+        (ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC) + 2) | 1
+    )
     return True
 
 def m3_interrupt_safe_point(

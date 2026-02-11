@@ -180,16 +180,14 @@ class ArmInterruptHandler:
         The only thing that can wake the M3 up from sleep is an external
         interrupt that starts to pend. Therefore, wait until
         external_interrupt_pending is set.
+
+        We should NOT interrupt here though, we should wait until it's safe to
+        interrupt before interrupting. Let handle_externally_pended_interrupts
+        handle it. The caller should be responsible to use UC_HOOK_BLOCK
+        before calling it.
         """
         self.external_interrupt_pending.wait()
-        self.external_interrupt_pending.clear()
-        
-        self.intr_queue.put([
-            None,
-            True, # increment_pc
-            tuple()
-        ])
-        self.intr_queue.join()
+        return
 
     def exc_return_callback(self) -> None:
         address = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC) | 1
