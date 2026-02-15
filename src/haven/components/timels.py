@@ -18,7 +18,7 @@ from env import *
 from lib.logger import GscemuLogger
 from .regdefs import TIMELS_REGS
 from lib.helpers import unhandled_register_exit, args_lambda_gen
-from .m3 import pend_external_irq
+from .m3 import pend_external_irq, unpend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -40,9 +40,10 @@ class TimerState:
         self.reloadval = 0xFFFFFFFF
         self.step = 0
         self.ier = 0  # Interrupt Enable
+        # undocumented
         self.isr = 0  # Interrupt Status
+        # undocumented
         self.ipr = 0  # Interrupt Pending
-        self.iar = 0  # Interrupt Acknowledge
         self.wakeup_ack = 0
 
         # Runtime state for countdown tracking
@@ -270,7 +271,7 @@ class LowSpeedTimer:
 
     def read_timer_iar(self, size: int, queue: queue.Queue, index: int) -> None:
         with self.timer_lock:
-            queue.put(self.timers[index].iar)
+            queue.put(0)
 
     def write_timer_iar(self, size: int, value: int, index: int) -> None:
         with self.timer_lock:
@@ -279,6 +280,7 @@ class LowSpeedTimer:
                 timer.status &= ~1
                 timer.isr &= ~1
                 timer.ipr &= ~1
+                unpend_external_irq(self.timers[index].irq)
 
     def read_timer_wakeup_ack(
         self, size: int, queue: queue.Queue, index: int

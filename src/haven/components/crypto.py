@@ -18,7 +18,7 @@ from lib.helpers import (
     unhandled_register_io,
     idx_regs_to_regmap
 )
-from .m3 import pend_external_irq
+from .m3 import pend_external_irq, unpend_external_irq
 from .timels import (
     component_start_timer_debug, 
     component_stop_timer_debug
@@ -64,6 +64,7 @@ class CryptoAccelerator:
                     self.control_process()
 
                 if self.host_cmd:
+                    #start_time = time.perf_counter()
                     if GSCEMULATOR_DISABLE_CRYPTO_ENGINE:
                         time.sleep(0.01)
                         pend_external_irq(4)
@@ -92,7 +93,7 @@ class CryptoAccelerator:
                             cont = False
                             traceback.print_exc()
                             if self.crypto_emulator is not None:
-                                print(
+                                prints.debug(
                                     self.crypto_emulator.get_instruction(
                                         self.crypto_emulator.get_pc()
                                     )
@@ -103,6 +104,7 @@ class CryptoAccelerator:
                     component_start_timer_debug()
                     
                     pend_external_irq(4)
+                    #print(time.perf_counter() - start_time)
 
                 self.opqueue.task_done()
 
@@ -228,8 +230,8 @@ class CryptoAccelerator:
         queue.put(0)
     
     def write_int_state(self, size: int, value: int):
-        # Doesn't matter
-        return
+        if value & 0x2:
+            unpend_external_irq(4)
     
     def read_int_enable(self, size: int, queue: queue.Queue):
         # Doesn't matter

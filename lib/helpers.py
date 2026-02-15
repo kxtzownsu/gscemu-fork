@@ -127,6 +127,13 @@ def read_u32_from_sp(
     ucmutex.reg_write(sp_type, sp + 4)
     return val
 
+def pattern_list_gen(starting_offset, indexes, step=4):
+    temp = []
+    for index in range(indexes):
+        temp.append(starting_offset + (index * step))
+
+    return temp
+
 def halt_emulation(
     uc: qemu.Uc,
     ucthread: UcThread,

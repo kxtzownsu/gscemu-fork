@@ -6,7 +6,7 @@ import threading
 import collections
 
 class FifoLock:
-    """FIFO(first in, last out) oriented threading.Lock.
+    """FIFO(first in, first out) oriented threading.Lock.
 
     This class is to ensure that threads which attempt to get hold of a 
     singular lock get access to the lock in priority. Of course, on a

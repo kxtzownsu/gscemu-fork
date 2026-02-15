@@ -12,7 +12,7 @@ from env import *
 from lib.logger import GscemuLogger
 from .regdefs import UART_REGS
 from lib.helpers import unhandled_register_exit, unhandled_register_io
-from .m3 import pend_external_irq
+from .m3 import pend_external_irq, unpend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -175,7 +175,13 @@ class UartController:
         queue.put(0)
 
     def write_istateclr(self, size: int, value: int) -> None:
-        pass
+        if value & 1:
+            # TX_INT
+            unpend_external_irq(177)
+
+        if value & 2:
+            # RX_INT
+            unpend_external_irq(174)
 
 c_emu = UartController()
 c_emu.start_worker()

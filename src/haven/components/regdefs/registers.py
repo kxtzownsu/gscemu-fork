@@ -2,13 +2,7 @@
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
 from lib.globalvars import *
-
-def _reg_list(starting_offset, indexes, bytes=4):
-    temp = []
-    for index in range(indexes):
-        temp.append(starting_offset + (index * bytes))
-
-    return temp
+from lib.helpers import pattern_list_gen as reg_list
 
 REG_DEFS = {
     # Although this is FLASH, this region is immutable. On real silicon,
@@ -186,7 +180,7 @@ GLOBALSEC_REGS = {
     "DUMMYKEY": [0x9598, 0xaf04, 0xb2ac],
     
     "SB_COMP_STATUS": 0x1000,
-    "SB_BL_SIG": _reg_list(0x1004, 8),
+    "SB_BL_SIG": reg_list(0x1004, 8),
     "SIG_UNLOCK": 0x1024,
 
     "HIDE_ROM": 0x40d0,
@@ -197,44 +191,44 @@ GLOBALSEC_REGS = {
         "CFG_LOCK": 0x102c,
         "FW_TRIGGER": 0x4000,
         "CONTROL": 0x405c,
-        "INTR_STS": _reg_list(0x4004, 2),
-        "NMI_EN": _reg_list(0x400c, 2),
+        "INTR_STS": reg_list(0x4004, 2),
+        "NMI_EN": reg_list(0x400c, 2),
         "DLYCTR": [
             {
                 "BASE": 0x4060,
                 "LEN": 0x406c,
-                "EN": _reg_list(0x402c, 2),
+                "EN": reg_list(0x402c, 2),
                 "SHUTDOWN_EN": 0x4078,
                 "CLEAR": 0x4084,
             },
             {
                 "BASE": 0x4064,
                 "LEN": 0x4070,
-                "EN": _reg_list(0x4034, 2),
+                "EN": reg_list(0x4034, 2),
                 "SHUTDOWN_EN": 0x407c,
                 "CLEAR": 0x4088,
             },
             {
                 "BASE": 0x4068,
                 "LEN": 0x4074,
-                "EN": _reg_list(0x403c, 2),
+                "EN": reg_list(0x403c, 2),
                 "SHUTDOWN_EN": 0x4080,
                 "CLEAR": 0x408c,
             }
         ],
         "GROUP": [
             {
-                "EN": _reg_list(0x4014, 2),
+                "EN": reg_list(0x4014, 2),
                 "CTR": 0x4044,
                 "THRESHOLD": 0x4050,
             },
             {
-                "EN": _reg_list(0x401c, 2),
+                "EN": reg_list(0x401c, 2),
                 "CTR": 0x4048,
                 "THRESHOLD": 0x4054,
             },
             {
-                "EN": _reg_list(0x4024, 2),
+                "EN": reg_list(0x4024, 2),
                 "CTR": 0x404c,
                 "THRESHOLD": 0x4058,
             }
@@ -299,23 +293,23 @@ M3_REGS = {
     "CCR": 0xed14,
     "SHSCR": 0xed24,
 
-    "NVIC_ISER": _reg_list(0xe100, 8),
-    "NVIC_ICER": _reg_list(0xe180, 8),
-    "NVIC_ICPR": _reg_list(0xe280, 8),
-    "NVIC_IPR": _reg_list(0xe400, 64),
+    "NVIC_ISER": reg_list(0xe100, 8),
+    "NVIC_ICER": reg_list(0xe180, 8),
+    "NVIC_ICPR": reg_list(0xe280, 8),
+    "NVIC_IPR": reg_list(0xe400, 64),
     "NVIC_STIR": 0xef00,
 }
 
 KEYMGR_REGS = {
-    "HKEY_RWR": _reg_list(0x3000, 8),
-    "HKEY_FWR": _reg_list(0x3100, 8),
-    "HKEY_FRR": _reg_list(0x3300, 8),
+    "HKEY_RWR": reg_list(0x3000, 8),
+    "HKEY_FWR": reg_list(0x3100, 8),
+    "HKEY_FRR": reg_list(0x3300, 8),
     "FW_MAJOR_VERSION": 0x3124,
     "FWR_VLD": 0x3120,
     "FWR_LOCK": 0x3128,
     "RWR_VLD": 0x3020,
     "RWR_LOCK": 0x3024,
-    "CERT_REVOKE_CTRL": _reg_list(0x4a8, 3),
+    "CERT_REVOKE_CTRL": reg_list(0x4a8, 3),
     "HKEY_ERR_FLAGS": 0x3324,
 
     "SHA": {
@@ -327,8 +321,8 @@ KEYMGR_REGS = {
         },
         "TRIG": 0x410,
         "INPUT_FIFO": 0x440,
-        "STS_H": _reg_list(0x444, 8),
-        "KEY_W": _reg_list(0x464, 8),
+        "STS_H": reg_list(0x444, 8),
+        "KEY_W": reg_list(0x464, 8),
         "ITOP": 0x48c,
 
         "USE_HIDDEN_KEY": 0x490, # Unimplemented, handled
@@ -346,9 +340,9 @@ KEYMGR_REGS = {
         "CTRL": 0x0,
         "WFIFO_DATA": 0x8,
         "RFIFO_DATA": 0xc,
-        "KEY": _reg_list(0x2c, 8),
+        "KEY": reg_list(0x2c, 8),
         "KEY_START": 0x4c,
-        "CTR": _reg_list(0x50, 4),
+        "CTR": reg_list(0x50, 4),
         "RAND_STALL_CTL": 0x60,
         "WFIFO_LEVEL": 0x64,
         "WFIFO_FULL": 0x68,
@@ -356,9 +350,9 @@ KEYMGR_REGS = {
         "RFIFO_EMPTY": 0x70,
 
         "GCM_DO_ACC": 0x7c,
-        "GCM_H": _reg_list(0x80, 4),
-        "GCM_MAC": _reg_list(0x90, 4),
-        "GCM_HASH_IN": _reg_list(0xa0, 4),
+        "GCM_H": reg_list(0x80, 4),
+        "GCM_MAC": reg_list(0x90, 4),
+        "GCM_HASH_IN": reg_list(0xa0, 4),
 
         "WIPE_SECRETS": 0xb0,
         "USE_HIDDEN_KEY": 0xc0,
@@ -371,7 +365,7 @@ FLASH_REGS = {
     "PE_EN": 0xc8,
 
     "TRANS": 0x8,
-    "WR_DATA": _reg_list(0x48, 32),
+    "WR_DATA": reg_list(0x48, 32),
     "ERROR": 0xd4,
     "PROTECT_INFO1_ERASE": 0xc,
 
@@ -408,8 +402,8 @@ CRYPTO_REGS = {
     "HOST_CMD": 0x20,
     "RAND_STALL_CTL": 0x30,
     "WIPE_SECRETS": 0x50,
-    "DMEM_DUMMY": _reg_list(0x4000, 1024),
-    "IMEM_DUMMY": _reg_list(0x8000, 1024),
+    "DMEM_DUMMY": reg_list(0x4000, 1024),
+    "IMEM_DUMMY": reg_list(0x8000, 1024),
 }
 
 USB_REGS = {
@@ -418,6 +412,18 @@ USB_REGS = {
 
 GPIO_REGS = {
     "DATAIN": 0x0,
+    "DATAOUT": 0x4,
+    "SETDOUTEN": 0x10,
+    "CLRDOUTEN": 0x14,
+    "SETINTEN": 0x20,
+    "CLRINTEN": 0x24,
+    "SETINTTYPE": 0x28,
+    "CLRINTTYPE": 0x2c,
+    "SETINTPOL": 0x30,
+    "CLRINTPOL": 0x34,
+    "CLRINTSTAT": 0x38,
+    "MASKLOWBYTE": reg_list(0x400, 64),
+    "MASKHIGHBYTE": reg_list(0x800, 64),
 }
 
 TRNG_REGS = {
@@ -442,4 +448,73 @@ TRNG_REGS = {
     
     "FSM_STATE": 0x2c,
     "OUTPUT_TIME_COUNTER": 0x24,
+}
+
+PINMUX_SEL = {
+    "DIOM_SEL": reg_list(0x0, 5, 8),
+    "DIOA_SEL": reg_list(0x28, 15, 8),
+    "DIOB_SEL": reg_list(0xa0, 8, 8),
+    "RESETB_SEL": 0xe0,
+    "VIO_SEL": reg_list(0xe8, 2, 8),
+    "GPIO0_SEL": reg_list(0xf8, 16),
+    "GPIO1_SEL": reg_list(0x138, 16),
+
+    "I2C0_SCL_SEL": 0x178,
+    "I2C0_SDA_SEL": 0x17c,
+    "I2C1_SCL_SEL": 0x180,
+    "I2C1_SDA_SEL": 0x184,
+    "I2CS0_SCL_SEL": 0x188,
+    "I2CS0_SDA_SEL": 0x18c,
+
+    "PMU_BROWNOUT_DET_SEL": 0x190,
+    "PMU_TESTBUS_SEL": reg_list(0x194, 8),
+
+    "RTC0_RTC_CLK_TEST_SEL": 0x1b4,
+
+    "SPI1_SPICLK_SEL": 0x1b8,
+    "SPI1_SPICSB_SEL": 0x1bc,
+    "SPI1_SPIMISO_SEL": 0x1c0,
+    "SPI1_SPIMOSI_SEL": 0x1c4,
+
+    "SPS0_TESTBUS_SEL": reg_list(0x1c8, 8),
+
+    "TEMP0_TST_ADC_CLK_SEL": 0x1e8,
+    "TEMP0_TST_ADC_HI_SER_SEL": 0x1ec,
+    "TEMP0_TST_ADC_LO_SER_SEL": 0x1f0,
+    "TEMP0_TST_ADC_VLD_SER_SEL": 0x1f4,
+
+    "TRNG0_TRNG_RO_DIV_SEL": 0x1f8,
+    "TRNG0_TRNG_RO_REF_DIV_SEL": 0x1fc,
+
+    "UART0_CTS_SEL": 0x200,
+    "UART0_RTS_SEL": 0x204,
+    "UART0_RX_SEL": 0x208,
+    "UART0_TX_SEL": 0x20c,
+
+    "UART1_CTS_SEL": 0x210,
+    "UART1_RTS_SEL": 0x214,
+    "UART1_RX_SEL": 0x218,
+    "UART1_TX_SEL": 0x21c,
+
+    "UART2_CTS_SEL": 0x220,
+    "UART2_RTS_SEL": 0x224,
+    "UART2_RX_SEL": 0x228,
+    "UART2_TX_SEL": 0x22c,
+
+    "USB0_EXT_DM_PULLUP_EN_SEL": 0x230,
+    "USB0_EXT_DP_RPU1_ENB_SEL": 0x234,
+    "USB0_EXT_DP_RPU2_ENB_SEL": 0x238,
+    "USB0_EXT_FS_EDGE_SEL_SEL": 0x23c,
+    "USB0_EXT_RX_DMI_SEL": 0x240,
+    "USB0_EXT_RX_DPI_SEL": 0x244,
+    "USB0_EXT_RX_RCV_SEL": 0x248,
+    "USB0_EXT_SUSPENDB_SEL": 0x24c,
+    "USB0_EXT_TX_DMO_SEL": 0x250,
+    "USB0_EXT_TX_DPO_SEL": 0x254,
+    "USB0_EXT_TX_OEB_SEL": 0x258,
+
+    "VOLT0_TST_NEG_GLITCH_DET_SEL": 0x25c,
+    "VOLT0_TST_POS_GLITCH_DET_SEL": 0x260,
+
+    "XO0_TESTBUS_SEL": reg_list(0x264, 8),
 }
