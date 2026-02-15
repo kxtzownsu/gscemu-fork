@@ -422,8 +422,8 @@ GPIO_REGS = {
     "SETINTPOL": 0x30,
     "CLRINTPOL": 0x34,
     "CLRINTSTAT": 0x38,
-    "MASKLOWBYTE": reg_list(0x400, 64),
-    "MASKHIGHBYTE": reg_list(0x800, 64),
+    "MASKLOWBYTE": reg_list(0x400, 256),
+    "MASKHIGHBYTE": reg_list(0x800, 256),
 }
 
 TRNG_REGS = {

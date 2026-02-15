@@ -635,7 +635,7 @@ def component_read_handler_0(
     try:
         return c_emu_0.queue_read_worker_op(size, _REG_FUNC_MAP_0[offset][0])
     except KeyError:
-        return 0
+        unhandled_register_exit(g_uc(), ucthread(), prints, "GPIO0", offset)
 
 def component_write_handler_0(
     uc: qemu.Uc,
@@ -647,7 +647,7 @@ def component_write_handler_0(
     try:
         c_emu_0.queue_write_worker_op(size, value, _REG_FUNC_MAP_0[offset][1])
     except KeyError:
-        return 0
+        unhandled_register_exit(g_uc(), ucthread(), prints, "GPIO0", offset)
     
 def component_read_handler_1(
     uc: qemu.Uc,
@@ -658,7 +658,7 @@ def component_read_handler_1(
     try:
         return c_emu_1.queue_read_worker_op(size, _REG_FUNC_MAP_1[offset][0])
     except KeyError:
-        return 0
+        unhandled_register_exit(g_uc(), ucthread(), prints, "GPIO1", offset)
 
 def component_write_handler_1(
     uc: qemu.Uc,
@@ -670,4 +670,4 @@ def component_write_handler_1(
     try:
         c_emu_1.queue_write_worker_op(size, value, _REG_FUNC_MAP_1[offset][1])
     except KeyError:
-        return 0
+        unhandled_register_exit(g_uc(), ucthread(), prints, "GPIO1", offset)
