@@ -36,8 +36,8 @@ def map_memory(qemu_mem_map_list: dict, mmio_mem_map_list: dict) -> bool:
     try:
         for i in qemu_mem_map_list.items():
             prints.debug(f"Mapping {i[0]} with " +
-                        f"addr=0x{i[1]["base_addr"]:x}" +
-                        f",size=0x{i[1]["size"]:x}")
+                        f"addr=0x{i[1]['base_addr']:x}" +
+                        f",size=0x{i[1]['size']:x}")
             g_uc().mem_map(
                 i[1]["base_addr"], 
                 i[1]["size"]
@@ -52,8 +52,8 @@ def map_memory(qemu_mem_map_list: dict, mmio_mem_map_list: dict) -> bool:
     try:
         for i in mmio_mem_map_list.items():
             prints.debug(f"Mapping {i[0]} with " +
-                        f"addr=0x{i[1]["base_addr"]:x}" +
-                        f",size=0x{i[1]["size"]:x}")
+                        f"addr=0x{i[1]['base_addr']:x}" +
+                        f",size=0x{i[1]['size']:x}")
             g_uc().mmio_map(
                 i[1]["base_addr"], 
                 i[1]["size"],
