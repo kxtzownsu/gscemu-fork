@@ -28,6 +28,7 @@ GSCEMULATOR_PC_LOGGING_SETTINGS = {
 
 # Always force SB_COMP_STATUS to True within GLOBALSEC. This allows garbage
 # values to be passed into SB_BL_SIG and execution will still be unlocked.
+# Decreases BootROM/RO bootup time by ~20-30%
 GSCEMULATOR_FORCE_SB_COMP_STATUS = True
 
 # Disable the CRYPTO engine and just claim the CRYPTO engine has finished

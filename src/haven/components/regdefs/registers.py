@@ -62,11 +62,6 @@ REG_DEFS = {
         "size": DEFAULT_REG_WIDTH,
     },
 
-    "SWDP0": { # Unimplemented
-        "base_addr": 0x40520000,
-        "size": DEFAULT_REG_WIDTH,
-    },
-
     "I2C0": {
         "base_addr": 0x40630000,
         "size": DEFAULT_REG_WIDTH,
@@ -116,6 +111,11 @@ MMIO_REG_DEFS = {
 
     "SPS0": {
         "base_addr": 0x40510000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "SWDP0": {
+        "base_addr": 0x40520000,
         "size": DEFAULT_REG_WIDTH,
     },
 
@@ -453,4 +453,10 @@ TRNG_REGS = {
     
     "FSM_STATE": 0x2c,
     "OUTPUT_TIME_COUNTER": 0x24,
+}
+
+SWDP_REGS = {
+    "BUILD_DATE": 0x30,
+    "BUILD_TIME": 0x34,
+    "P4_LAST_SYNC": 0x2c,
 }

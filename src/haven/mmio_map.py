@@ -19,6 +19,7 @@ from .components import usb as usb0
 from .components import gpio
 from .components import trng
 from .components import pinmux
+from .components import swdp as swdp0
 
 def blank_read_handler(*args, **kwargs) -> int:
     return 0
@@ -27,20 +28,25 @@ def blank_write_handler(*args, **kwargs) -> None:
     return
 
 MMIO_HANDLERS = {
+    "M3": [m3.component_read_handler, m3.component_write_handler],
     "GLOBALSEC": [globalsec.component_read_handler, globalsec.component_write_handler],
-    "FUSE0": [fuse0.component_read_handler, fuse0.component_write_handler],
+    "FLASH0": [flash0.component_read_handler, flash0.component_write_handler],
     "TIMELS0": [timels0.component_read_handler, timels0.component_write_handler],
-    "KEYMGR0": [keymgr0.component_read_handler, keymgr0.component_write_handler],
+    "FUSE0": [fuse0.component_read_handler, fuse0.component_write_handler],
+    "SWDP0": [swdp0.component_read_handler, swdp0.component_write_handler],
+
     "UART0": [uart0.component_read_handler, uart0.component_write_handler],
     "UART1": [blank_read_handler, blank_write_handler],
     "UART2": [blank_read_handler, blank_write_handler],
-    "FLASH0": [flash0.component_read_handler, flash0.component_write_handler],
-    "M3": [m3.component_read_handler, m3.component_write_handler],
+
+    "KEYMGR0": [keymgr0.component_read_handler, keymgr0.component_write_handler],
     "CRYPTO0": [crypto0.component_read_handler, crypto0.component_write_handler],
-    "USB0": [usb0.component_read_handler, usb0.component_write_handler],
+    "TRNG0": [trng.component_read_handler, trng.component_write_handler],
+
     "GPIO0": [gpio.component_read_handler_0, gpio.component_write_handler_0],
     "GPIO1": [gpio.component_read_handler_1, gpio.component_write_handler_1],
-    "TRNG0": [trng.component_read_handler, trng.component_write_handler],
     "PINMUX": [pinmux.component_read_handler, pinmux.component_write_handler],
+
+    "USB0": [blank_read_handler, blank_write_handler],
     "SPS0": [blank_read_handler, blank_write_handler],
 }
