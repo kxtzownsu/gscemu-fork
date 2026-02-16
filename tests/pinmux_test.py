@@ -4,7 +4,7 @@
 # run with python3 -m tests.pinmux_test
 
 import termcolor
-from src.haven.components.pinmux import PinDevice, PinStatus
+from lib.pindevice import PinDevice, PinStatus
 
 def test_single_pin():
     diob4 = PinDevice()

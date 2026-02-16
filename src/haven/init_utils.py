@@ -191,7 +191,7 @@ def install_tpm_endorsement_certs():
     current_size = len(cert_region)
     padding_needed = 2016 - current_size # 2048 - 32 for HMAC
     if padding_needed < 0:
-        prints.fatal("building cert region failed!")
+        prints.warning("building cert region failed!")
     cert_region.extend(bytes(padding_needed))
     
     # key1 = HMAC-SHA256(eps, "RSA")

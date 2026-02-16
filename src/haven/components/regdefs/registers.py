@@ -32,11 +32,6 @@ REG_DEFS = {
         "size": DEFAULT_REG_WIDTH * 2, # PMU has an unusually long reg width.
     },
 
-    "PINMUX": { # Unimplemented
-        "base_addr": 0x40060000,
-        "size": DEFAULT_REG_WIDTH,
-    },
-
     "RTC0": { # Unimplemented
         "base_addr": 0x400a0000,
         "size": DEFAULT_REG_WIDTH,
@@ -119,8 +114,18 @@ MMIO_REG_DEFS = {
         "size": DEFAULT_REG_WIDTH,
     },
 
+    "SPS0": {
+        "base_addr": 0x40510000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
     "TIMELS0": { 
         "base_addr": 0x40540000,
+        "size": DEFAULT_REG_WIDTH,
+    },
+
+    "PINMUX": {
+        "base_addr": 0x40060000,
         "size": DEFAULT_REG_WIDTH,
     },
 
@@ -448,73 +453,4 @@ TRNG_REGS = {
     
     "FSM_STATE": 0x2c,
     "OUTPUT_TIME_COUNTER": 0x24,
-}
-
-PINMUX_SEL = {
-    "DIOM_SEL": reg_list(0x0, 5, 8),
-    "DIOA_SEL": reg_list(0x28, 15, 8),
-    "DIOB_SEL": reg_list(0xa0, 8, 8),
-    "RESETB_SEL": 0xe0,
-    "VIO_SEL": reg_list(0xe8, 2, 8),
-    "GPIO0_SEL": reg_list(0xf8, 16),
-    "GPIO1_SEL": reg_list(0x138, 16),
-
-    "I2C0_SCL_SEL": 0x178,
-    "I2C0_SDA_SEL": 0x17c,
-    "I2C1_SCL_SEL": 0x180,
-    "I2C1_SDA_SEL": 0x184,
-    "I2CS0_SCL_SEL": 0x188,
-    "I2CS0_SDA_SEL": 0x18c,
-
-    "PMU_BROWNOUT_DET_SEL": 0x190,
-    "PMU_TESTBUS_SEL": reg_list(0x194, 8),
-
-    "RTC0_RTC_CLK_TEST_SEL": 0x1b4,
-
-    "SPI1_SPICLK_SEL": 0x1b8,
-    "SPI1_SPICSB_SEL": 0x1bc,
-    "SPI1_SPIMISO_SEL": 0x1c0,
-    "SPI1_SPIMOSI_SEL": 0x1c4,
-
-    "SPS0_TESTBUS_SEL": reg_list(0x1c8, 8),
-
-    "TEMP0_TST_ADC_CLK_SEL": 0x1e8,
-    "TEMP0_TST_ADC_HI_SER_SEL": 0x1ec,
-    "TEMP0_TST_ADC_LO_SER_SEL": 0x1f0,
-    "TEMP0_TST_ADC_VLD_SER_SEL": 0x1f4,
-
-    "TRNG0_TRNG_RO_DIV_SEL": 0x1f8,
-    "TRNG0_TRNG_RO_REF_DIV_SEL": 0x1fc,
-
-    "UART0_CTS_SEL": 0x200,
-    "UART0_RTS_SEL": 0x204,
-    "UART0_RX_SEL": 0x208,
-    "UART0_TX_SEL": 0x20c,
-
-    "UART1_CTS_SEL": 0x210,
-    "UART1_RTS_SEL": 0x214,
-    "UART1_RX_SEL": 0x218,
-    "UART1_TX_SEL": 0x21c,
-
-    "UART2_CTS_SEL": 0x220,
-    "UART2_RTS_SEL": 0x224,
-    "UART2_RX_SEL": 0x228,
-    "UART2_TX_SEL": 0x22c,
-
-    "USB0_EXT_DM_PULLUP_EN_SEL": 0x230,
-    "USB0_EXT_DP_RPU1_ENB_SEL": 0x234,
-    "USB0_EXT_DP_RPU2_ENB_SEL": 0x238,
-    "USB0_EXT_FS_EDGE_SEL_SEL": 0x23c,
-    "USB0_EXT_RX_DMI_SEL": 0x240,
-    "USB0_EXT_RX_DPI_SEL": 0x244,
-    "USB0_EXT_RX_RCV_SEL": 0x248,
-    "USB0_EXT_SUSPENDB_SEL": 0x24c,
-    "USB0_EXT_TX_DMO_SEL": 0x250,
-    "USB0_EXT_TX_DPO_SEL": 0x254,
-    "USB0_EXT_TX_OEB_SEL": 0x258,
-
-    "VOLT0_TST_NEG_GLITCH_DET_SEL": 0x25c,
-    "VOLT0_TST_POS_GLITCH_DET_SEL": 0x260,
-
-    "XO0_TESTBUS_SEL": reg_list(0x264, 8),
 }

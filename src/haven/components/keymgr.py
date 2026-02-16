@@ -126,7 +126,8 @@ class ShaEngine:
                 # If this is a USE_CERT operation, just ignore it and say
                 # the op is done.
                 if self.use_cert["ENABLE"]:
-                    prints.warning("SHA_USE_CERT usage is not supported!")
+                    # Use a debug instead of warning since this is intended.
+                    prints.debug("SHA_USE_CERT usage is not supported!")
                     self.use_cert["ENABLE"] = 0
                     self.itop = 1
                 else:

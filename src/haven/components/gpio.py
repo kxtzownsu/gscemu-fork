@@ -7,6 +7,7 @@ import queue
 import threading
 
 from lib.globalvars import *
+from lib.pindevice import PinDevice, PinStatus
 from env import *
 from lib.logger import GscemuLogger
 from .regdefs import GPIO_REGS
@@ -16,7 +17,6 @@ from lib.helpers import (
     pattern_list_gen
 )
 
-from .pinmux import PinDevice, PinStatus
 from .m3 import pend_external_irq, unpend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
@@ -180,10 +180,6 @@ class GpioController:
         self.opqueue.put([target_fn, (size, value)])
         self.opqueue.join()
 
-    def queue_write_datain_manual(self, bit: int, state: bool):
-        self.opqueue.put([self.datain_manual_write, (bit, state)])
-        self.opqueue.join()
-
     def queue_pindevice_intr(
         self, 
         current_pinstate: PinStatus, 
@@ -233,7 +229,8 @@ class GpioController:
         self.pindevices[bit].set_pininfo(pdpu, 10.0)
 
     def set_gpio_io(self, bit: int, io: bool):
-        self.pindevices[bit].mask_pininfo(io)
+        self.gpio_output[bit] = io
+        self.pindevices[bit].mask_pininfo(not io)
 
     def read_datain(self, size: int, queue: queue.Queue):
         val = 0
@@ -544,17 +541,6 @@ c_emu_0.start_worker()
 
 c_emu_1 = GpioController(1)
 c_emu_1.start_worker()
-
-# Assert GPIO_BATT_PRES_L to allow CCD to be opened
-c_emu_0.datain_manual_write(6, True)
-
-# Assert GPIO_I2CP_SDA to signal that the I2C bus is idle, else the console
-# gets spammed. Once we implement strap config, we will use SPI, so this is only
-# temporal(maybe).
-c_emu_0.queue_write_datain_manual(14, True)
-
-# Assert GPIO_TPM_RST_L to signal that the AP is on.
-c_emu_1.queue_write_datain_manual(0, True)
 
 _REG_FUNC_MAP_0 = {
     GPIO_REGS["DATAIN"]: [c_emu_0.read_datain, c_emu_0.write_datain],

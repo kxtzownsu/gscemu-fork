@@ -26,6 +26,7 @@ import unicorn as qemu
 
 from lib.globalvars import *
 from .init_utils import *
+from .pinmux_config import *
 from . import hooks
 from .components.regdefs import REG_DEFS, MMIO_REG_DEFS
 from lib.logger import GscemuLogger
@@ -86,6 +87,9 @@ class Emulator:
             return
         
         install_tpm_endorsement_certs()
+
+        init_strap_config()
+        init_custom_board_pinmux_features()
         
         g_uc().hook_add(qemu.UC_HOOK_INTR, hooks.intr_hook)
         

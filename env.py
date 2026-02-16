@@ -5,8 +5,8 @@ from lib.logger import GscemuLoggerSettings
 
 GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(
     global_switch=False,
-    debug_prints=True,
-    info_prints=True,
+    debug_prints=False,
+    info_prints=False,
     warning_prints=True,
 )
 
@@ -28,7 +28,7 @@ GSCEMULATOR_PC_LOGGING_SETTINGS = {
 
 # Always force SB_COMP_STATUS to True within GLOBALSEC. This allows garbage
 # values to be passed into SB_BL_SIG and execution will still be unlocked.
-GSCEMULATOR_FORCE_SB_COMP_STATUS = False
+GSCEMULATOR_FORCE_SB_COMP_STATUS = True
 
 # Disable the CRYPTO engine and just claim the CRYPTO engine has finished
 # op. This speeds up the emulator as the CRYPTO engine has large speed overhead, 

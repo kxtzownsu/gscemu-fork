@@ -98,7 +98,7 @@ class CryptoAccelerator:
                                         self.crypto_emulator.get_pc()
                                     )
                                 )
-                            prints.fatal(f"CRYPTO engine died :(")
+                            prints.warning(f"CRYPTO engine died :(")
 
                     self.dmem_mem = self.crypto_emulator.get_full_dmem().copy()
                     component_start_timer_debug()

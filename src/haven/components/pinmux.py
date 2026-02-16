@@ -13,277 +13,24 @@ import threading
 import enum
 import fractions
 
-from lib.globalvars import *
 from env import *
+from lib.globalvars import *
+from lib.pindevice import PinDevice, PinStatus
 from lib.logger import GscemuLogger
-#from .regdefs import PINMUX_REGS
-from lib.helpers import unhandled_register_exit
+from .regdefs.pinmux_registers import *
+from lib.helpers import unhandled_register_exit, idx_regs_to_regmap
 from lib.threadutils import FifoLock
+
+from .gpio import c_emu_0 as gpio0
+from .gpio import c_emu_1 as gpio1
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-def _normalize_resistance(resistance_ohms: float) -> float:
-    # pd/pu without resistance? Just normalize it to 50k for now.
-    if resistance_ohms <= 0:
-        prints.warning("_normalize_resistance 50k triggered, invalid val!")
-        return 50000.0
-    
-    return resistance_ohms
-
-def _parallel_ohms(res_list: list[float]) -> float:
-    # Follow the 1/R law to calculate resistance in parallel.
-    inv = 0.0
-    for r in res_list:
-        inv += 1.0 / r
-    
-    if inv:
-        # Round to 2dp, we don't need to be that accurate anyways.
-        return round(1.0 / inv, 2)
-    else:
-        return 0.0
-
-class PinStatus(enum.Enum):
-    PULLDOWN = enum.auto()
-    FLOATING = enum.auto()
-    PULLUP = enum.auto()
-
-class PinInfo:
-    def __init__(self):
-        self.pinstate: PinStatus = PinStatus.FLOATING
-        self.resistance_ohms: float = 0.0
-
-EMPTY_PININFO = PinInfo()
-
-class PinDevice:
-    """
-    This class is used to make pinmux devices, such as for GPIO pins,
-    PINMUX pads, SPS connections, etc.
-    """
-    def __init__(
-            self, 
-            interrupt_fn: typing.Callable[
-                [PinStatus, PinStatus, typing.Any]
-            , None] = None, 
-            interrupt_fn_userdata: typing.Any | None = None
-        ):
-        self.lock = FifoLock()
-
-        # The devices that are driving this pin. On the software side, a pin
-        # can only have 1 driver. But, PINMUX has an exception where
-        # 
-        self.driving_me = {
-            "INTERNAL": None,
-        }
-
-        # The devices that we have been assigned to drive
-        self.driving_components = set()
-
-        # The PinInfo that this device exerts onto components that it drives and
-        # on itself.
-        self.device_pininfo: PinInfo = PinInfo()
-
-        # Factor in the device_pininfo PinInfo from the component driving us 
-        # too.
-        self.balanced_pininfo: PinInfo = PinInfo()
-
-        # Convenience variable, allows us to disable output on a single pin
-        # to mask it to FLOATING, 0.0, without losing state when we re-enable
-        # the pin.
-        self.mask_device_pininfo = False
-
-        # Optionally, a device might want a signal on FALLING_EDGE/RISING_EDGE.
-        # This is needed for GPIO anyways.
-        self.interrupt_signal = interrupt_fn
-        self.user_data = interrupt_fn_userdata
-
-    def _update_balanced_pininfo(
-            self, new_pinstate: PinStatus, resistance: float | int
-        ):
-        # THIS SHOULD NOT BE CALLED WITHOUT A LOCK!!
-        current_pinstate = self.balanced_pininfo.pinstate
-        if current_pinstate != new_pinstate:
-            self.balanced_pininfo.pinstate = new_pinstate
-
-            if self.interrupt_signal:
-                # Caller should handle this interrupt signal properly,
-                # else they might get stale data.
-                self.interrupt_signal(
-                    current_pinstate, new_pinstate, self.user_data
-                )
-
-        self.balanced_pininfo.resistance_ohms = float(resistance)
-
-    def drive_by_component(self, driver: PinDevice):
-        # Someone will drive us.
-        with self.lock:
-            if self.driving_me["INTERNAL"]:
-                with self.driving_me["INTERNAL"].lock:
-                    # We should not KeyError, it is impossible.
-                    # If it happens then we should catch it!
-                    self.driving_me["INTERNAL"].driving_components.remove(self)
-
-            self.driving_me["INTERNAL"] = driver
-            with self.driving_me["INTERNAL"].lock:
-                driver.driving_components.add(self)
-
-        self.pininfo_sync()
-
-    def disconnect_driver(self):
-        with self.lock:
-            if self.driving_me["INTERNAL"]:
-                with self.driving_me["INTERNAL"].lock:
-                    # We should not KeyError, it is impossible.
-                    # If it happens then we should catch it!
-                    self.driving_me["INTERNAL"].driving_components.remove(self)
-
-                self.driving_me["INTERNAL"] = None
-
-        self.pininfo_sync()
-
-    def add_external_drive_by_component(self, tag: str, driver: PinDevice):
-        with self.lock:
-            if self.driving_me[tag]:
-                with self.driving_me[tag].lock:
-                    # We should not KeyError, it is impossible.
-                    # If it happens then we should catch it!
-                    self.driving_me[tag].driving_components.remove(self)
-
-            self.driving_me[tag] = driver
-            with self.driving_me[tag].lock:
-                driver.driving_components.add(self)
-
-        self.pininfo_sync()
-
-    def disconnect_external_driver(self, tag: str):
-        with self.lock:
-            if self.driving_me[tag]:
-                with self.driving_me[tag].lock:
-                    # We should not KeyError, it is impossible.
-                    # If it happens then we should catch it!
-                    self.driving_me[tag].driving_components.remove(self)
-
-                self.driving_me.pop(tag)
-
-        self.pininfo_sync()
-
-    def balance_pininfo(self, pininfos: list[PinInfo]):
-        # THIS SHOULD NOT BE CALLED WITHOUT A LOCK!!
-        pullups = []
-        pulldowns = []
-
-        for info in pininfos:
-            if info.pinstate == PinStatus.PULLUP:
-                pullups.append(
-                    _normalize_resistance(info.resistance_ohms)
-                )
-            elif info.pinstate == PinStatus.PULLDOWN:
-                pulldowns.append(
-                    _normalize_resistance(info.resistance_ohms)
-                )
-
-        if not pullups and not pulldowns:
-            self._update_balanced_pininfo(PinStatus.FLOATING, 0.0)
-            return
-
-        if pullups and not pulldowns:
-            self._update_balanced_pininfo(
-                PinStatus.PULLUP, _parallel_ohms(pullups)
-            )
-            return
-
-        if pulldowns and not pullups:
-            self._update_balanced_pininfo(
-                PinStatus.PULLDOWN, _parallel_ohms(pulldowns)
-            )
-            return
-
-        ru = _parallel_ohms(pullups)
-        rd = _parallel_ohms(pulldowns)
-
-        # Based on Cr50, it seems the chip's behavior to settle pin contention
-        # is to follow the dominant puller.
-        if (ru < 100) and (rd < 100):
-            # This shouldn't happen. 100ohm vs 100ohm pin contention is
-            # basically a short.
-            prints.fatal(
-                "extremely strong pin contention occured!! undefined behavior."
-            )
-            self._update_balanced_pininfo(PinStatus.FLOATING, 0.0)
-        elif ru < rd:
-            self._update_balanced_pininfo(PinStatus.PULLUP, ru)
-        elif rd < ru:
-            self._update_balanced_pininfo(PinStatus.PULLDOWN, rd)
-        else:
-            prints.fatal("ru == rd!! PinStatus set to FLOATING!!")
-            self._update_balanced_pininfo(PinStatus.FLOATING, 0.0)
-
-    def set_pininfo(self, pdpu: PinStatus, resistance: int | float):
-        # This function is used to update the pd/pu on the pin
-        # itself. If other components are driving us, then the updated value
-        # would be in self.balanced_pininfo. But we need the device_pininfo
-        # to track the pd/pu exerted on the chip, not influenced by the
-        # balanced_pininfo.
-
-        with self.lock:
-            self.device_pininfo.pinstate = pdpu
-            self.device_pininfo.resistance_ohms = round(float(resistance), 2)
-
-        self.pininfo_sync()
-
-    def mask_pininfo(self, en: bool):
-        # A convenience function to mask the pininfo value. This is needed when
-        # e.g. GPIO needs to disable a pin's output.
-        with self.lock:
-            self.mask_device_pininfo = en
-
-        self.pininfo_sync()
-
-    def read_pdpu(self) -> PinStatus:
-        with self.lock:
-            return self.balanced_pininfo.pinstate
-    
-    def read_resistance(self) -> float:
-        with self.lock:
-            return self.balanced_pininfo.resistance_ohms
-
-    def pininfo_sync(self, visited: set | None = None):
-        if visited is None:
-            visited = set()
-        if self in visited:
-            return
-        visited.add(self)
-
-        # First, balance our own device PinInfo.
-        with self.lock:
-            # First, balance our own PinInfo with others that are driving us.
-            pininfos = []
-            for pindevice in self.driving_me.values():
-                if not pindevice:
-                    continue
-                
-                with pindevice.lock:
-                    if not pindevice.mask_device_pininfo:
-                        pininfos.append(pindevice.device_pininfo)
-                    else:
-                        pininfos.append(EMPTY_PININFO)
-
-            if not self.mask_device_pininfo:
-                pininfos.append(self.device_pininfo)
-            else:
-                pininfos.append(EMPTY_PININFO) 
-
-            self.balance_pininfo(pininfos)
-
-            # Snapshot driver targets so we can call them without the lock, else
-            # we might deadlock.
-            driving_components = list(self.driving_components)
-
-        # Next, sync other pin's PinInfos.
-        for driving_component in driving_components:
-            driving_component.pininfo_sync(visited)
-
 class Cr50Pinmux:
     def __init__(self):
+        self.opthread = None
+        self.opqueue = queue.Queue()
+
         self.internal_pd = PinDevice()
         self.internal_pu = PinDevice()
         self.internal_pd.set_pininfo(PinStatus.PULLDOWN, 50000.0)
@@ -308,3 +55,278 @@ class Cr50Pinmux:
         self.resetb: list[PinDevice] = []
         for _ in range(1):
             self.resetb.append(PinDevice())
+
+        self.gpio0: list[PinDevice] = gpio0.pindevices
+        self.gpio1: list[PinDevice] = gpio1.pindevices
+
+        # Stored values just for the sake of register readback, although never
+        # used in the Cr50(maybe in the BootROM/RO for register verification?)
+        self.sel_stored = {}
+        self.ctl_stored = {}
+
+        self.exiten0 = 0
+        self.exitedge0 = 0
+        self.exitinv0 = 0
+        self.hold = 0
+
+    def _convert_pinmux_ctl_reg_idx_to_pindevice(self, idx: int):
+        if idx < 5:
+            return self.diom[idx]
+
+        if idx < 20:
+            return self.dioa[idx - 5]
+
+        if idx < 28:
+            return self.diob[idx - 20]
+
+        if idx == 28:
+            return self.resetb[0]
+
+        if idx < 31:
+            return self.vio[idx - 29]
+        
+        return None
+
+    def _convert_pinmux_sel_reg_idx_to_pindevice(self, idx: int):
+        if idx < 5:
+            return self.diom[idx]
+
+        if idx < 20:
+            return self.dioa[idx - 5]
+
+        if idx < 28:
+            return self.diob[idx - 20]
+
+        if idx == 28:
+            return self.resetb[0]
+
+        if idx < 31:
+            return self.vio[idx - 29]
+
+        if idx < 47:
+            return self.gpio0[idx - 31]
+
+        if idx < 63:
+            return self.gpio1[idx - 47]
+
+        return None
+
+    # DIOxx only accepts GPIOx_GPIOx
+    def _convert_pinmux_sel_val_to_gpio_pindevice(self, val: int):
+        if not isinstance(val, int):
+            return None
+
+        if 0x1 <= val <= 0x10:
+            return self.gpio0[val - 0x1]
+
+        if 0x11 <= val <= 0x20:
+            return self.gpio1[val - 0x11]
+
+        return None
+
+    # GPIOx_GPIOx only accepts DIOxx or VIOx
+    def _convert_pinmux_sel_val_to_dio_pindevice(self, val: int):
+        if not isinstance(val, int):
+            return None
+
+        if val == 0:
+            return None
+
+        if 0x1a <= val <= 0x1e:
+            return self.diom[0x1e - val]
+
+        if 0xb <= val <= 0x19:
+            return self.dioa[0x19 - val]
+
+        if 0x3 <= val <= 0xa:
+            return self.diob[0xa - val]
+
+        if val == 0x2:
+            return self.vio[0]
+
+        if val == 0x1:
+            return self.vio[1]
+
+        return None
+    
+    def pinmux_worker(self):
+        while True:
+            try:
+                op = self.opqueue.get()
+                target_fn, args = op
+
+                target_fn(*args)
+
+                self.opqueue.task_done()
+
+            except Exception as e:
+                prints.fatal(e)
+
+    def start_worker(self):
+        if not self.opthread:
+            self.opthread = threading.Thread(target=self.pinmux_worker)
+            self.opthread.daemon = True
+            self.opthread.start()
+
+    def queue_read_worker_op(self, size: int, target_fn):
+        retqueue = queue.Queue()
+        self.opqueue.put([target_fn, (size, retqueue)])
+        self.opqueue.join()
+        return retqueue.get_nowait()
+        
+    def queue_write_worker_op(self, size: int, value: int, target_fn):
+        self.opqueue.put([target_fn, (size, value)])
+        self.opqueue.join()
+
+    def read_sel(self, size: int, queue: queue.Queue, index: int):
+        val = 0
+
+        try:
+            val = self.sel_stored[index]
+        except KeyError:
+            val = 0
+
+        queue.put(val)
+    
+    def write_sel(self, size: int, value: int, index: int):
+        # Index is ALWAYS valid, because of the regmap.
+
+        drived_device = self._convert_pinmux_sel_reg_idx_to_pindevice(index)
+        if not drived_device:
+            # Ignore the device, because gscemu doesn't support it.
+            return
+        
+        # Validate the value given to the SEL register
+        if (value > 0x63):
+            drived_device.disconnect_driver()
+            self.sel_stored[index] = 0
+            return
+
+        self.sel_stored[index] = value
+        
+        if value == 0:
+            drived_device.disconnect_driver()
+            return
+        
+        if index < 31:
+            driver_device = (
+                self._convert_pinmux_sel_val_to_gpio_pindevice(value)
+            )
+        else:
+            driver_device = (
+                self._convert_pinmux_sel_val_to_dio_pindevice(value)
+            )
+
+        if not driver_device:
+            # Ignore the device, because gscemu doesn't support it.
+            return
+        
+        drived_device.drive_by_component(driver=driver_device)
+
+    def read_ctl(self, size: int, queue: queue.Queue, index: int):
+        val = 0
+
+        try:
+            val = self.ctl_stored[index]
+        except KeyError:
+            val = 0
+
+        queue.put(val)
+
+    def write_ctl(self, size: int, value: int, index: int):
+        # Index is ALWAYS valid, because of the regmap.
+
+        self.ctl_stored[index] = value
+
+        drived_device = self._convert_pinmux_ctl_reg_idx_to_pindevice(index)
+        if not drived_device:
+            prints.warning("Could not find drived_device for CTL!!")
+            return
+        
+        if value & 0x4: # IE_MASK
+            if not (value & 0x18 == 0x18):
+                if value & 0x8: # PD_MASK
+                    drived_device.add_external_drive_by_component(
+                        "PINMUX_CTL", self.internal_pd
+                    )
+                elif value & 0x10: # PU_MASK
+                    drived_device.add_external_drive_by_component(
+                        "PINMUX_CTL", self.internal_pu
+                    )
+                elif (value & 0x18) == 0: # NO PD/PU, although IE set.
+                    drived_device.disconnect_external_driver("PINMUX_CTL")
+            else:
+                prints.warning("Conflicting SEL PD/PU in PINMUX!")
+        else:
+            drived_device.disconnect_external_driver("PINMUX_CTL")
+
+    def read_exiten0(self, size: int, queue: queue.Queue):
+        queue.put(self.exiten0)
+    
+    def write_exiten0(self, size: int, value: int):
+        self.exiten0 = value
+        return
+    
+    def read_exitedge0(self, size: int, queue: queue.Queue):
+        queue.put(self.exitedge0)
+    
+    def write_exitedge0(self, size: int, value: int):
+        self.exitedge0 = value
+        return
+    
+    def read_exitinv0(self, size: int, queue: queue.Queue):
+        queue.put(self.exitinv0)
+    
+    def write_exitinv0(self, size: int, value: int):
+        self.exitinv0 = value
+        return
+
+    def read_hold(self, size: int, queue: queue.Queue):
+        queue.put(self.hold)
+    
+    def write_hold(self, size: int, value: int):
+        self.hold = value
+        return
+
+c_emu = Cr50Pinmux()
+c_emu.start_worker()
+
+_REG_FUNC_MAP = {
+    PINMUX_REGS["EXITEN0"]: [c_emu.read_exiten0, c_emu.write_exiten0],
+    PINMUX_REGS["EXITEDGE0"]: [c_emu.read_exitedge0, c_emu.write_exitedge0],
+    PINMUX_REGS["EXITINV0"]: [c_emu.read_exitinv0, c_emu.write_exitinv0],
+    PINMUX_REGS["HOLD"]: [c_emu.read_hold, c_emu.write_hold],
+}
+
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, PINMUX_SEL_REGS_LIST,
+    c_emu.read_sel, c_emu.write_sel
+)
+
+idx_regs_to_regmap(
+    _REG_FUNC_MAP, PINMUX_CTL_REGS_LIST,
+    c_emu.read_ctl, c_emu.write_ctl
+)
+
+def component_read_handler(
+    uc: qemu.Uc,
+    offset: int,
+    size: int,
+    user_data: typing.Any,
+) -> int:
+    try:
+        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
+    except KeyError:
+        unhandled_register_exit(g_uc(), ucthread(), prints, "PINMUX", offset)
+
+def component_write_handler(
+    uc: qemu.Uc,
+    offset: int,
+    size: int,
+    value: int,
+    user_data: typing.Any,
+) -> None:
+    try:
+        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
+    except KeyError:
+        unhandled_register_exit(g_uc(), ucthread(), prints, "PINMUX", offset)
