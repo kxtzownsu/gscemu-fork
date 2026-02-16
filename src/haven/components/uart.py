@@ -44,11 +44,8 @@ class UartController:
                     self.state &= ~128 # BIT(7), False
                     pend_external_irq(174)
 
-                if not target_fn:
-                    self.opqueue.task_done()
-                    continue
-
-                target_fn(*args) # Splat the arguments into the target_fn
+                if target_fn:
+                    target_fn(*args) # Splat the arguments into the target_fn
 
                 # For write operations, this doesn't do anything. For read
                 # operations, we need to tell the handler that we have processed

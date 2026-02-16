@@ -85,20 +85,18 @@ class CryptoAccelerator:
 
                     self.host_cmd = 0 # Clear HOST_CMD
 
-                    cont = True
-                    while cont:
-                        try:
-                            cont, _, _ = self.crypto_emulator.step()
-                        except Exception as e:
-                            cont = False
-                            traceback.print_exc()
-                            if self.crypto_emulator is not None:
-                                prints.debug(
-                                    self.crypto_emulator.get_instruction(
-                                        self.crypto_emulator.get_pc()
-                                    )
+                    try:
+                        while self.crypto_emulator.step_continue():
+                            pass
+                    except Exception:
+                        traceback.print_exc()
+                        if self.crypto_emulator is not None:
+                            prints.debug(
+                                self.crypto_emulator.get_instruction(
+                                    self.crypto_emulator.get_pc()
                                 )
-                            prints.warning(f"CRYPTO engine died :(")
+                            )
+                        prints.warning(f"CRYPTO engine died :(")
 
                     self.dmem_mem = self.crypto_emulator.get_full_dmem().copy()
                     component_start_timer_debug()
