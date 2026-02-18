@@ -243,22 +243,28 @@ class Cr50Pinmux:
             prints.warning("Could not find drived_device for CTL!!")
             return
         
-        if value & 0x4: # IE_MASK
-            if not (value & 0x18 == 0x18):
-                if value & 0x8: # PD_MASK
-                    drived_device.add_external_drive_by_component(
-                        "PINMUX_CTL", self.internal_pd
-                    )
-                elif value & 0x10: # PU_MASK
-                    drived_device.add_external_drive_by_component(
-                        "PINMUX_CTL", self.internal_pu
-                    )
-                elif (value & 0x18) == 0: # NO PD/PU, although IE set.
-                    drived_device.disconnect_external_driver("PINMUX_CTL")
-            else:
-                prints.warning("Conflicting SEL PD/PU in PINMUX!")
+        if not (value & 0x18 == 0x18):
+            if value & 0x8: # PD_MASK
+                drived_device.add_external_drive_by_component(
+                    "PINMUX_CTL", self.internal_pd
+                )
+            elif value & 0x10: # PU_MASK
+                drived_device.add_external_drive_by_component(
+                    "PINMUX_CTL", self.internal_pu
+                )
+            elif (value & 0x18) == 0:
+                # PD/PU not set, disconnect external driver.
+                drived_device.disconnect_external_driver("PINMUX_CTL")
         else:
-            drived_device.disconnect_external_driver("PINMUX_CTL")
+            prints.warning("Conflicting SEL PD/PU in PINMUX!")
+        
+        # Should we enable input reading?
+        if value & 0x4: # IE_MASK
+            # Enable input
+            drived_device.mask_pininfo(False)
+        else:
+            # Disable input
+            drived_device.mask_pininfo(True)
 
     def read_exiten0(self, size: int, queue: queue.Queue):
         queue.put(self.exiten0)
