@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
+"""
+All register values and SEL values derived from
+https://chromium.googlesource.com/chromiumos/platform/ec/+/a766634/chip/g/hw_regdefs.h
+"""
 
 from lib.globalvars import *
 from lib.helpers import pattern_list_gen as reg_list

@@ -28,7 +28,8 @@ class ARMSoftwareDebugPort:
     def __init__(self):
         self.opmutex = FifoLock()
 
-        # No idea what these are
+        # These registers were only used on the FPGA board, on real silicon 
+        # they are empty registers and unused.
         self.build_date = 0x0
         self.build_time = 0x0
         self.p4_last_sync = 0x0

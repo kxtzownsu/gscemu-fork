@@ -5,6 +5,9 @@
 
 Including this into the main register file is not wise. This is a really long
 list of registers. Therefore, seperate it into its own file.
+
+All register values derived from
+https://chromium.googlesource.com/chromiumos/platform/ec/+/a766634/chip/g/hw_regdefs.h
 """
 
 FUSE_REGISTERS = {
