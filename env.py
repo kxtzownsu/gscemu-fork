@@ -4,7 +4,7 @@
 from lib.logger import GscemuLoggerSettings
 
 GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(
-    global_switch=False,
+    global_switch=True,
     debug_prints=False,
     info_prints=False,
     warning_prints=True,
@@ -35,3 +35,6 @@ GSCEMULATOR_FORCE_SB_COMP_STATUS = True
 # op. This speeds up the emulator as the CRYPTO engine has large speed overhead, 
 # but the CRYPTO engine will be unusable.
 GSCEMULATOR_DISABLE_CRYPTO_ENGINE = False
+
+# Pull the DIOB4 pad to 5k PU to enable spiflash in the ROM.
+GSCEMULATOR_ASSERT_SPIFLASH_PIN = False

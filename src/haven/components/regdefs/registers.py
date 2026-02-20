@@ -31,11 +31,6 @@ REG_DEFS = {
         "size": 0x800,
     },
 
-    "PMU": { # Unimplemented
-        "base_addr": 0x40000000,
-        "size": DEFAULT_REG_WIDTH * 2, # PMU has an unusually long reg width.
-    },
-
     "RTC0": { # Unimplemented
         "base_addr": 0x400a0000,
         "size": DEFAULT_REG_WIDTH,
@@ -78,6 +73,11 @@ REG_DEFS = {
 }
 
 MMIO_REG_DEFS = {
+    "PMU": {
+        "base_addr": 0x40000000,
+        "size": DEFAULT_REG_WIDTH * 2, # PMU has an unusually long reg width.
+    },
+
     "GLOBALSEC": { 
         "base_addr": 0x40090000,
         "size": DEFAULT_REG_WIDTH,
@@ -463,4 +463,33 @@ SWDP_REGS = {
     "BUILD_DATE": 0x30,
     "BUILD_TIME": 0x34,
     "P4_LAST_SYNC": 0x2c,
+}
+
+PMU_REGS = {
+    "RESET": 0x0,
+    "CLRRST": 0x8,
+    "RSTSRC": 0xc,
+    "GLOBAL_RESET": 0x10,
+    "LOW_POWER_DIS": 0x14, # low power cfg reg
+    "EXITPD_MASK": 0x4c, # exit low power src cfg
+
+    "PERICLKSET0": 0x64, # enable periph clock
+    "PERICLKCLR0": 0x68, # disable periph clock
+    "PERICLKSET1": 0x6c, # enable periph clock
+    "PERICLKCLR1": 0x70, # disable periph clock
+
+    "RST_WR_EN": reg_list(0x90, 2, 8),
+    "RST": reg_list(0x94, 2, 8),
+
+    "SW_PDB": 0x34, # only used in the BootROM
+
+    "PWRDN_SCRATCH": reg_list(0xa0, 32),
+    "PWRDN_SCRATCH_LOCK": reg_list(0x120, 2),
+
+    "LONG_LIFE_SCRATCH": reg_list(0x12c, 4),
+    "LONG_LIFE_SCRATCH_WR_EN": 0x128, # write-enable
+
+    "INT_ENABLE": 0x13c, # interrupt enable
+
+    "CHIP_ID": 0x1fff8,
 }

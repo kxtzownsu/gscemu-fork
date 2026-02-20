@@ -20,6 +20,7 @@ from .components import gpio
 from .components import trng
 from .components import pinmux
 from .components import swdp as swdp0
+from .components import pmu as pmu
 
 def blank_read_handler(*args, **kwargs) -> int:
     return 0
@@ -34,6 +35,7 @@ MMIO_HANDLERS = {
     "TIMELS0": [timels0.component_read_handler, timels0.component_write_handler],
     "FUSE0": [fuse0.component_read_handler, fuse0.component_write_handler],
     "SWDP0": [swdp0.component_read_handler, swdp0.component_write_handler],
+    "PMU": [pmu.component_read_handler, pmu.component_write_handler],
 
     "UART0": [uart0.component_read_handler, uart0.component_write_handler],
     "UART1": [blank_read_handler, blank_write_handler],
