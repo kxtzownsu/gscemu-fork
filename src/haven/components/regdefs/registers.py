@@ -493,3 +493,8 @@ PMU_REGS = {
 
     "CHIP_ID": 0x1fff8,
 }
+
+SPS_REGS = {
+    "DUMMY_WORD": 0x4,
+    "ICTRL": 0x64, # Interrupt Control
+}

@@ -32,6 +32,9 @@ class PowerManagementUnit:
         self.sw_pdb = 0
         self.periph_clocks_en = [False] * 48
 
+        # REVISION:
+        # 3 -> B1
+        # 4 -> B2
         self.chip_id = {
             "JTAG_STANDARD": 0x1, # bit 0
             "MFG_ID": 0x4a6, # bits 1-11

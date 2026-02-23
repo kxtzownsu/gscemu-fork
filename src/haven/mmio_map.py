@@ -21,6 +21,7 @@ from .components import trng
 from .components import pinmux
 from .components import swdp as swdp0
 from .components import pmu as pmu
+from .components import sps as sps0
 
 def blank_read_handler(*args, **kwargs) -> int:
     return 0
@@ -50,5 +51,5 @@ MMIO_HANDLERS = {
     "PINMUX": [pinmux.component_read_handler, pinmux.component_write_handler],
 
     "USB0": [blank_read_handler, blank_write_handler],
-    "SPS0": [blank_read_handler, blank_write_handler],
+    "SPS0": [sps0.component_read_handler, sps0.component_write_handler],
 }

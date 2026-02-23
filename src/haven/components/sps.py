@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
-"""Example component handler"""
 
 import typing
 import unicorn as qemu
@@ -10,19 +9,29 @@ import threading
 from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import XX_REGS
+from .regdefs import SPS_REGS
 from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-class ComponentXX:
+class SPISlaveDevice:
     def __init__(self):
         self.opthread = None
         self.opqueue = queue.Queue()
 
-        self.xy = 0
+        self.miso_data = 0
 
-    def xx_worker(self):
+        self.ictrl = {
+            "CS_ASSERT": False,
+            "CS_DEASSERT": False,
+            "RXFIFO_OVERFLOW": False,
+            "TXFIFO_EMPTY": False,
+            "TXFIFO_FULL": False,
+            "TXFIFO_LEVEL": False,
+            "RXFIFO_LEVEL": False
+        }
+
+    def sps_worker(self):
         while True:
             try:
                 op = self.opqueue.get()
@@ -37,7 +46,7 @@ class ComponentXX:
 
     def start_worker(self):
         if not self.opthread:
-            self.opthread = threading.Thread(target=self.xx_worker)
+            self.opthread = threading.Thread(target=self.sps_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
@@ -50,17 +59,19 @@ class ComponentXX:
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
-    def read_xy(self, size: int, queue: queue.Queue):
-        queue.put(self.xy)
+    def read_dummy_word(self, size: int, queue: queue.Queue):
+        # I don't think we can read from DUMMY_WORD, it's unclear.
+        queue.put(0)
     
-    def write_xy(self, size: int, value: int):
-        self.xy = value
+    def write_dummy_word(self, size: int, value: int):
+        #print(f"MISO drive to {value}")
+        self.miso_data = value
 
-c_emu = ComponentXX()
+c_emu = SPISlaveDevice()
 c_emu.start_worker()
 
 _REG_FUNC_MAP = {
-    XX_REGS["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]
+    SPS_REGS["DUMMY_WORD"]: [c_emu.read_dummy_word, c_emu.write_dummy_word],
 }
 
 def component_read_handler(
@@ -72,7 +83,8 @@ def component_read_handler(
     try:
         return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
     except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "XX", offset)
+        #unhandled_register_exit(g_uc(), ucthread(), prints, "SPS0", offset)
+        return 0
 
 def component_write_handler(
     uc: qemu.Uc,
@@ -84,4 +96,5 @@ def component_write_handler(
     try:
         c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
     except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "XX", offset)
+        #unhandled_register_exit(g_uc(), ucthread(), prints, "SPS0", offset)
+        return 0
