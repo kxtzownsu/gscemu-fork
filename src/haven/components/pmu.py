@@ -147,9 +147,9 @@ class PowerManagementUnit:
     def read_chip_id(self, size: int, queue: queue.Queue):
         val = 0
         val |= (self.chip_id["JTAG_STANDARD"] & 0x1)
-        val |= (self.chip_id["MFG_ID"] & 0x7FF) << 1
-        val |= (self.chip_id["PART_NUM"] & 0xFFFF) << 12
-        val |= (self.chip_id["REVISION"] & 0xF) << 28
+        val |= (self.chip_id["MFG_ID"] << 1) & 0xffe
+        val |= (self.chip_id["PART_NUM"] << 12) & 0xffff000
+        val |= (self.chip_id["REVISION"] << 28) & 0xf0000000
 
         queue.put(val)
     

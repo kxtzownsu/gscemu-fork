@@ -495,6 +495,11 @@ PMU_REGS = {
 }
 
 SPS_REGS = {
+    "CTRL": 0x0, # SPS main control reg
     "DUMMY_WORD": 0x4,
-    "ICTRL": 0x64, # Interrupt Control
+    "FIFO_CTRL": 0x28,
+    "RXFIFO_THRESHOLD": 0x48,
+    "ISTATE": 0x54, # Interrupt Status register
+    "ISTATE_CLR": 0x58, # Interrupt Status Clear register
+    "ICTRL": 0x64, # Interrupt Control register
 }

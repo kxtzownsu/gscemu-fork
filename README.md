@@ -1,30 +1,33 @@
 # gscemulator public release
 
 ## gscemu(lator), an emulator for the GSC(Google Security Chip(s))
+
 powered by unicorn and python, gscemulator is able to run a production
 copy of a gsc image!
 
 ## how to run
+
 `pip3 install -r requirements.txt && python3 main.py`
 
-fun fact, this was written 100% without AI by appleflyer <3
+fun fact, this was written 95% without AI by appleflyer <3 \
+(TIMERLS was vibecoded)
 
 ## support
+
 - haven
 - dauntless(TBC)
 
 ## developer notes
+
 if you were to build on this project by using the `src.emulator.haven.Emulator`
 class, you can only have ONE instance of the emulator, or any other chip type
 for that matter.
 
 ### standard for devs
-The python code written mostly follows the google style guide, with some 
-exceptions or changes here and there.
-    - 80 char ruler for python files
-    - functions use a standardized comment system
-    - all types and return values of functions should be already defined with 
-        `->` or `:`
 
-This is not every standard that is used, but are the main standards that we 
+The python code written mostly follows the google style guide, with some
+exceptions or changes here and there. - 80 char ruler for python files - functions use a standardized comment system - all types and return values of functions should be already defined with
+`->` or `:`
+
+This is not every standard that is used, but are the main standards that we
 should use to write code.

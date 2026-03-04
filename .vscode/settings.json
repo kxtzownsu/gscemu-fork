@@ -2,7 +2,7 @@
     "editor.rulers": [80], // enforce line length, this is google standard
 
     // turn off some useless python features that are annoying.
-    "python.REPL.enableREPLSmartSend": false, 
+    "python.REPL.enableREPLSmartSend": false,
     "python.analysis.supportDocstringTemplate": false,
-    "python.terminal.activateEnvironment": false,
+    "python.terminal.activateEnvironment": false
 }

@@ -19,17 +19,17 @@ class SPISlaveDevice:
         self.opthread = None
         self.opqueue = queue.Queue()
 
-        self.miso_data = 0
-
-        self.ictrl = {
-            "CS_ASSERT": False,
-            "CS_DEASSERT": False,
-            "RXFIFO_OVERFLOW": False,
-            "TXFIFO_EMPTY": False,
-            "TXFIFO_FULL": False,
-            "TXFIFO_LEVEL": False,
-            "RXFIFO_LEVEL": False
-        }
+        self.tx_dummy_word = 0
+        
+        # SPI settings CTRL register
+        self.ctrl = 0
+        # Used to control if we should trigger the interrupt.
+        self.ictrl = 0
+        # Which interrupts are currently pending?
+        self.istate = 0
+        # RX/TX CTRL register
+        self.fifo_ctrl = 0
+        self.rxfifo_threshold = 0
 
     def sps_worker(self):
         while True:
@@ -40,6 +40,14 @@ class SPISlaveDevice:
                 target_fn(*args)
 
                 self.opqueue.task_done()
+
+                if self.fifo_ctrl & 0x1:
+                    # Reset the TX FIFO, then deassert _RST.
+                    self.fifo_ctrl &= ~0x1
+                
+                if self.fifo_ctrl & 0x8:
+                    # Reset the RX FIFO, then deassert _RST.
+                    self.fifo_ctrl &= ~0x8
 
             except Exception as e:
                 prints.fatal(e)
@@ -59,19 +67,72 @@ class SPISlaveDevice:
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
+    def read_ctrl(self, size: int, queue: queue.Queue):
+        queue.put(self.ctrl)
+
+    def write_ctrl(self, size: int, value: int):
+        self.ctrl = value
+
     def read_dummy_word(self, size: int, queue: queue.Queue):
         # I don't think we can read from DUMMY_WORD, it's unclear.
         queue.put(0)
     
     def write_dummy_word(self, size: int, value: int):
-        #print(f"MISO drive to {value}")
-        self.miso_data = value
+        self.tx_dummy_word = value
 
+    def read_ictrl(self, size: int, queue: queue.Queue):
+        queue.put(self.ictrl)
+
+    def write_ictrl(self, size: int, value: int):
+        self.ictrl = value
+
+    def read_istate(self, size: int, queue: queue.Queue):
+        queue.put(self.istate)
+
+    def write_istate(self, size: int, value: int):
+        # Only the system can assert or deassert ISTATE unless by ISTATE_CLR
+        return
+    
+    def read_istate_clr(self, size: int, queue: queue.Queue):
+        queue.put(0)
+    
+    def write_istate_clr(self, size: int, value: int):
+        for bit in range(32):
+            bs = (1 << bit)
+            if not value & bs:
+                continue
+
+            if not self.istate & bs:
+                continue
+
+            # Clear the bit in ISTATE
+            self.istate &= ~bs
+
+    def read_fifo_ctrl(self, size: int, queue: queue.Queue):
+        queue.put(self.fifo_ctrl)
+
+    def write_fifo_ctrl(self, size: int, value: int):
+        self.fifo_ctrl = value
+
+    def read_rxfifo_threshold(self, size: int, queue: queue.Queue):
+        queue.put(self.rxfifo_threshold)
+
+    def write_rxfifo_threshold(self, size: int, value: int):
+        self.rxfifo_threshold = value
+      
 c_emu = SPISlaveDevice()
 c_emu.start_worker()
 
 _REG_FUNC_MAP = {
+    SPS_REGS["CTRL"]: [c_emu.read_ctrl, c_emu.write_ctrl],
     SPS_REGS["DUMMY_WORD"]: [c_emu.read_dummy_word, c_emu.write_dummy_word],
+    SPS_REGS["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl],
+    SPS_REGS["ISTATE"]: [c_emu.read_istate, c_emu.write_istate],
+    SPS_REGS["ISTATE_CLR"]: [c_emu.read_istate_clr, c_emu.write_istate_clr],
+    SPS_REGS["FIFO_CTRL"]: [c_emu.read_fifo_ctrl, c_emu.write_fifo_ctrl],
+    SPS_REGS["RXFIFO_THRESHOLD"]: [
+        c_emu.read_rxfifo_threshold, c_emu.write_rxfifo_threshold
+    ],
 }
 
 def component_read_handler(
@@ -83,8 +144,7 @@ def component_read_handler(
     try:
         return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
     except KeyError:
-        #unhandled_register_exit(g_uc(), ucthread(), prints, "SPS0", offset)
-        return 0
+        unhandled_register_exit(g_uc(), ucthread(), prints, "SPS0", offset)
 
 def component_write_handler(
     uc: qemu.Uc,
@@ -96,5 +156,4 @@ def component_write_handler(
     try:
         c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
     except KeyError:
-        #unhandled_register_exit(g_uc(), ucthread(), prints, "SPS0", offset)
-        return 0
+        unhandled_register_exit(g_uc(), ucthread(), prints, "SPS0", offset)
