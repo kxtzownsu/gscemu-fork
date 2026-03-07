@@ -93,8 +93,8 @@ class Emulator:
         
         g_uc().hook_add(qemu.UC_HOOK_INTR, hooks.intr_hook)
         
-        # We need to also capture invalid memory accesses. We should integrate
-        # this with the M3 in the future. MemManage intr?
+        # We need to also capture invalid memory accesses to trigger
+        # exceptions.
         g_uc().hook_add(UNICORN_MEM_INVALID_HOOKS, hooks.mem_invalid_access)
 
         # On an external interrupt, we shouldn't just branch to the interrupt

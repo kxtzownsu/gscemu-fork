@@ -20,6 +20,7 @@ from .components.m3 import (
     exc_return_handler,
     handle_externally_pended_interrupts,
     wait_for_interrupt,
+    unsafe_pend_sysintr
 )
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
@@ -33,19 +34,21 @@ def mem_invalid_access(
     value: int,
     user_data
 ) -> bool:
-    kind = {
-        qemu.UC_MEM_READ_UNMAPPED: "READ", 
-        qemu.UC_MEM_WRITE_UNMAPPED: "WRITE", 
-        qemu.UC_MEM_FETCH_UNMAPPED: "FETCH",
-    }
+    unsafe_pend_sysintr(5) # BusFault
 
-    prints.fatal(
-        f"Invalid memory {kind[access]} " + 
-        f"with address=0x{address:08x}, size={size}, " +
-        f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
-    )
-    
-    return False
+    # When we return from a UC_MEM_x_UNMAPPED hook, we need to map the memory.
+    # Unicorn will try to re-access the memory and crash the emulator.
+    # There is no way around this issue as of now, and there's also no
+    # UC_ERR_MAP hook to capture this issue.
+    page_addr = address & ~0xFFF
+    try:
+        uc.mem_map(page_addr, 0x1000)
+    except qemu.UcError:
+        # Mapping already overlaps something else! But honestly this
+        # shouldn't even happen.
+        pass
+
+    return True
 
 def intr_hook(
     uc: qemu.Uc,

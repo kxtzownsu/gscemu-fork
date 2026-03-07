@@ -176,6 +176,14 @@ class ArmInterruptHandler:
         ])
         self.intr_queue.join()
 
+    def queue_unsafe_pend_sysintr(self, intr: int) -> None:
+        self.intr_queue.put([
+            self.unsafe_pend_sysintr,
+            False, # increment_pc
+            (intr,)
+        ])
+        self.intr_queue.join()
+
     def handle_externally_pended_interrupts(self) -> None:
         if not self.external_interrupt_pending.is_set():
             return
@@ -232,6 +240,9 @@ class ArmInterruptHandler:
     def unsafe_unpend_external_irq(self, irq) -> None:
         with self.nvic_pend_lock:
             self.nvic_pend[irq] = False
+
+    def unsafe_pend_sysintr(self, intr) -> None:
+        self.nvic_sys_pend[intr - 1] = True
 
     def wait_for_interrupt(self) -> None:
         """
@@ -552,9 +563,56 @@ class ArmSC300:
         self.dwt_ctrl = 0
         self.vtor = 0
 
+        # Extra debug registers
+        self.mmfs = 0
+        self.bfar = 0
+        self.mfar = 0
+        self.hfsr = 0
+        self.dfsr = 0
+
     def start_cyccnt_time(self) -> None:
         with self.mutex:
             self.cyccnt_time_start = time.perf_counter_ns()
+
+    def read_mmfs(self, size: int) -> None:
+        with self.mutex:
+            return self.mmfs
+
+    def write_mmfs(self, size: int, value: int) -> None:
+        with self.mutex:
+            self.mmfs = value
+
+    def read_bfar(self, size: int) -> None:
+        with self.mutex:
+            return self.bfar
+
+    def write_bfar(self, size: int, value: int) -> None:
+        with self.mutex:
+            self.bfar = value
+
+    def read_mfar(self, size: int) -> None:
+        with self.mutex:
+            return self.mfar
+
+    def write_mfar(self, size: int, value: int) -> None:
+        with self.mutex:
+            self.mfar = value
+
+    def read_hfsr(self, size: int) -> None:
+        with self.mutex:
+            return self.hfsr
+
+    def write_hfsr(self, size: int, value: int) -> None:
+        with self.mutex:
+            self.hfsr = value
+
+    def read_dfsr(self, size: int) -> None:
+        with self.mutex:
+            return self.dfsr
+
+    def write_dfsr(self, size: int, value: int) -> None:
+        with self.mutex:
+            self.dfsr = value
 
     def read_demcr(self, size: int) -> None:
         with self.mutex:
@@ -634,6 +692,12 @@ _REG_FUNC_MAP = {
     M3_REGS["VTOR"]: [c_emu.read_vtor, c_emu.write_vtor],
     M3_REGS["CCR"]: [c_emu.read_ccr, c_emu.write_ccr],
     M3_REGS["SHSCR"]: [c_emu.read_shscr, c_emu.write_shscr],
+
+    M3_REGS["MMFS"]: [c_emu.read_mmfs, c_emu.write_mmfs],
+    M3_REGS["BFAR"]: [c_emu.read_bfar, c_emu.write_bfar],
+    M3_REGS["MFAR"]: [c_emu.read_mfar, c_emu.write_mfar],
+    M3_REGS["HFSR"]: [c_emu.read_hfsr, c_emu.write_hfsr],
+    M3_REGS["DFSR"]: [c_emu.read_dfsr, c_emu.write_dfsr],
 }
 
 _INTR_FUNC_MAP = {
@@ -678,6 +742,11 @@ def unsafe_unpend_external_irq(irq: int) -> None:
     # Only use this if we are sure that it is run in a single threaded
     # context(must be synchronous, not asynchronous with emulator)
     c_emu.intr_op.queue_unsafe_unpend_external_irq(irq)
+
+def unsafe_pend_sysintr(intr: int) -> None:
+    # Only use this if we are sure that it is run in a single threaded
+    # context(must be synchronous, not asynchronous with emulator)
+    c_emu.intr_op.queue_unsafe_pend_sysintr(intr)
 
 def pend_external_irq(irq: int) -> None:
     c_emu.intr_op.pend_external_irq(irq)

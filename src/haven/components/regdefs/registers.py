@@ -302,6 +302,12 @@ M3_REGS = {
     "CCR": 0xed14,
     "SHSCR": 0xed24,
 
+    "MMFS": 0xed28,
+    "BFAR": 0xed38,
+    "MFAR": 0xed34,
+    "HFSR": 0xed2c,
+    "DFSR": 0xed30,
+
     "NVIC_ISER": reg_list(0xe100, 8),
     "NVIC_ICER": reg_list(0xe180, 8),
     "NVIC_ICPR": reg_list(0xe280, 8),

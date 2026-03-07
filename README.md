@@ -26,8 +26,10 @@ for that matter.
 ### standard for devs
 
 The python code written mostly follows the google style guide, with some
-exceptions or changes here and there. - 80 char ruler for python files - functions use a standardized comment system - all types and return values of functions should be already defined with
-`->` or `:`
+exceptions or changes here and there. 
+    - 80 char ruler for python files 
+    - functions use a standardized comment system 
+    - all types and return values of functions should be already defined with `->` or `:`
 
 This is not every standard that is used, but are the main standards that we
 should use to write code.
