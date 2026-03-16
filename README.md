@@ -26,10 +26,18 @@ for that matter.
 ### standard for devs
 
 The python code written mostly follows the google style guide, with some
-exceptions or changes here and there. 
-    - 80 char ruler for python files 
-    - functions use a standardized comment system 
+exceptions or changes here and there. \
+    - 80 char ruler for python files \
+    - functions use a standardized comment system \
     - all types and return values of functions should be already defined with `->` or `:`
 
 This is not every standard that is used, but are the main standards that we
 should use to write code.
+
+### why are components in different files
+
+originally, the purpose was to be able to swap components between different
+chip types easily, but more and more that has gotten harder and harder to do due
+to tight integration between many of the components. \
+instead, now, the purpose of splitting them into files is for better code
+readability.

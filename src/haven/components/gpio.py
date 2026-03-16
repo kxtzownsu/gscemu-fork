@@ -38,13 +38,6 @@ GPIO_IRQS = [
     ],
 ]
 
-def _pinstate_to_level(pinstate: PinStatus) -> bool:
-    # Convert pinstate to boolean
-    if pinstate == PinStatus.PULLUP:
-        return True
-
-    return False
-
 class GpioController:
     def __init__(self, num: int):
         self.num = num
@@ -210,7 +203,9 @@ class GpioController:
         # Called when the PinStatus changes, is not called if only the
         # resistance changes.
         old_level = self.gpio_real_levels[pin_number]
-        new_level = _pinstate_to_level(new_pinstate)
+        new_level = False
+        if new_pinstate == PinStatus.PULLUP:
+            new_level = True
 
         self.gpio_real_levels[pin_number] = new_level
 

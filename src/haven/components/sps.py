@@ -1,6 +1,18 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
+"""
+All standards based on:
+https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/cr50_stab/chip/g/spp_tpm.c
+https://chromium.googlesource.com/chromiumos/platform/ec/+/refs/heads/cr50_stab/chip/g/spp.c
+https://chromium.googlesource.com/chromiumos/platform/depthcharge/+/refs/heads/main/src/drivers/tpm/google/spi.c
+
+The whole point of this file is to create a SPI slave driver to interface with
+the SPI master which is the AP on real hardware.
+This is necessary for TPM operations where we can expose the route to TPM
+within gscemulator while keeping the logic accurate.
+"""
+
 import typing
 import unicorn as qemu
 import queue
@@ -19,6 +31,7 @@ class SPISlaveDevice:
         self.opthread = None
         self.opqueue = queue.Queue()
 
+        # Used when slave has nothing to put on MISO on a clock pulse.
         self.tx_dummy_word = 0
         
         # SPI settings CTRL register

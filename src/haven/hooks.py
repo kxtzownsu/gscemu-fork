@@ -34,6 +34,20 @@ def mem_invalid_access(
     value: int,
     user_data
 ) -> bool:
+    kind = {
+        qemu.UC_MEM_READ_UNMAPPED: "READ", 
+        qemu.UC_MEM_WRITE_UNMAPPED: "WRITE", 
+        qemu.UC_MEM_FETCH_UNMAPPED: "FETCH",
+    }
+
+    prints.warning(
+        f"Bad memory access {kind[access]} at 0x{address:x} on " +
+        f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}." +
+        "Emulator will crash soon..."
+    )
+    if access == qemu.UC_MEM_WRITE_UNMAPPED:
+        prints.warning(f"value written = 0x{value:x}")
+        
     unsafe_pend_sysintr(5) # BusFault
 
     # When we return from a UC_MEM_x_UNMAPPED hook, we need to map the memory.
