@@ -2,6 +2,7 @@
 venv/
 .venv/
 __pycache__/
+build/
 
 # MacOS artifacts
 .DS_Store

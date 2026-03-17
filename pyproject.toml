@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2025 HavenOverflow/appleflyer
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gscemu"
+version = "0.1.0"
+description = "An emulator for Google Security Chips"
+readme = "README.md"
+license = {text = "AGPL-3.0-or-later"}
+requires-python = ">=3.8"
+dependencies = [
+    "termcolor",
+    "pycryptodome",
+    "unicorn @ git+https://github.com/appleflyerv3/unicorn.git@mmio_map_pc_sync#subdirectory=bindings/python",
+    "ot-dsim @ git+https://github.com/HavenOverflow/ot_dsim.git",
+]
+
+[project.scripts]
+gscemu = "main:main"
+
+[tool.setuptools]
+py-modules = ["main", "env"]
+
+[tool.setuptools.packages.find]
+include = ["lib*", "src*", "fw*"]
+
+[tool.setuptools.package-data]
+"fw.rom" = ["*.rom"]
+"fw.haven" = ["*.bin"]

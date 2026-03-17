@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
+from pathlib import Path
+import fw.rom
+import fw.haven
 from lib.logger import GscemuLoggerSettings
 
 GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(
@@ -11,8 +14,8 @@ GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(
 )
 
 GSCEMULATOR_FW_PATHS = {
-    "bootrom": "fw/rom/haven.rom",
-    "firmware": "fw/haven/cr50_prod_0_5_271.bin"
+    "bootrom": str(Path(fw.rom.__file__).parent / "haven.rom"),
+    "firmware": str(Path(fw.haven.__file__).parent / "cr50_prod_0_5_271.bin"),
 }
 GSCEMULATOR_FW_STRICT_SIZE_CHECKING = False
 

@@ -55,4 +55,10 @@ def main():
 
     chipemu.start_emulation()
 
-main()
+# We need this now that we're making gscemu a pip installable CLI tool, so that
+# we do not double call the main function, causing double emulator
+# initialization and more issues down the line.
+# gscemu should also still be runnable from python3 main.py, thus we still
+# keep this.
+if __name__ == "__main__":
+    main()

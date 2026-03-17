@@ -7,10 +7,11 @@ copy of a gsc image!
 
 ## how to run
 
-`pip3 install -r requirements.txt && python3 main.py`
+`pip3 install git+https://github.com/HavenOverflow/gscemu && gscemu`
 
-fun fact, this was written 95% without AI by appleflyer <3 \
-(TIMERLS was vibecoded)
+this was written 95% without AI, but one component within the emulator was \
+still written with AI(timels.py). Removal and rewrite of this component is \
+planned soon.
 
 ## support
 

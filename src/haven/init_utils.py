@@ -46,6 +46,7 @@ def map_memory(qemu_mem_map_list: dict, mmio_mem_map_list: dict) -> bool:
         # We failed to map the memory, possibly because the base_addr or size
         # was invalid. This is a dev issue and even so, we should handle it
         # properly, to accomodate for forks of this repository.
+        traceback.print_exc()
         return False
     
     # Map ComponentHandler managed memory.
