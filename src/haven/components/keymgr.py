@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2025 HavenOverflow/appleflyer
+# Copyright (C) 2026 HavenOverflow/appleflyer
 """Cr50 KEYMGR component
 
 KEYMGR is used for 2 main purposes:

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2025 HavenOverflow/appleflyer
+# Copyright (C) 2026 HavenOverflow/appleflyer
 """SWDP component handler. This is possibly part of the ARM CPU.
 
 The usage of SWDP is really quite undocumented, so not much we can infer.

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2025 HavenOverflow/appleflyer
+# Copyright (C) 2026 HavenOverflow/appleflyer
 
 """Main file that contains the Emulator object and all it's logic.
 
@@ -30,7 +30,6 @@ from .pinmux_config import *
 from . import hooks
 from .components.regdefs import REG_DEFS, MMIO_REG_DEFS
 from lib.logger import GscemuLogger
-from lib.threadutils import UcMutex
 
 from .components.m3 import c_emu as m3_emu
 from .components.uart import cr50_uart_input

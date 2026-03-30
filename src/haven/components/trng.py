@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2025 HavenOverflow/appleflyer
+# Copyright (C) 2026 HavenOverflow/appleflyer
 """Cr50 TRNG engine
 
 On real silicon, the other registers matter. To not overcomplicate things, let's

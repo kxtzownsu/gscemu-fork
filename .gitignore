@@ -3,6 +3,7 @@ venv/
 .venv/
 __pycache__/
 build/
+gscemu.egg-info
 
 # MacOS artifacts
 .DS_Store

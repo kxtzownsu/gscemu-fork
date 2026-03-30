@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2025 HavenOverflow/appleflyer
+# Copyright (C) 2026 HavenOverflow/appleflyer
 """The component handler for the M3 component
 
 The Cr50 runs an Arm SC300 CortexM3 armv7m CPU.

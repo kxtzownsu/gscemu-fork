@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (C) 2025 HavenOverflow/appleflyer
+# Copyright (C) 2026 HavenOverflow/appleflyer
 """TPM endorsement certificates for TPM initialization.
 
 All these certificates have been extracted from the RO_A region on a production
