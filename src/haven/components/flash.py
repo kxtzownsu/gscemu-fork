@@ -10,7 +10,6 @@ import time
 from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import FLASH_REGS
 from lib.helpers import (
     unhandled_register_exit, 
     unhandled_register_io, 

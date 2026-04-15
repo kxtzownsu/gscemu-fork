@@ -11,7 +11,6 @@ from env import *
 from lib.pindevice import PinDevice, PinStatus
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import GPIO_REGS
 from lib.helpers import (
     unhandled_register_exit, 
     idx_regs_to_regmap,

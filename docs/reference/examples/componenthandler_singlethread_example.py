@@ -6,10 +6,10 @@ import typing
 import unicorn as qemu
 import queue
 
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
-from .regdefs import XX_REGS
 from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
@@ -27,31 +27,36 @@ class ComponentXX:
         with self.opmutex:
             self.xy = value
 
-c_emu = ComponentXX()
+def init_ComponentXX(ctx: EmulatorContext, regs: dict):
+    c_emu = ComponentXX()
 
-_REG_FUNC_MAP = {
-    XX_REGS["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]
-}
+    reg_fn_map = {
+        regs["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]
+    }
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return _REG_FUNC_MAP[offset][0](size)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "XX", offset)
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return reg_fn_map[offset][0](size)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "XX", offset)
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        _REG_FUNC_MAP[offset][1](size, value)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "XX", offset)
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            reg_fn_map[offset][1](size, value)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "XX", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )
