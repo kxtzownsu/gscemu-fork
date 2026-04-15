@@ -4,6 +4,7 @@
 import inspect
 import typing
 import unicorn as qemu
+from lib.emulator_context import EmulatorContext
 from lib.ucthread import UcThread
 from lib.threadutils import UcMutex
 from env import *
@@ -13,17 +14,16 @@ from lib.logger import GscemuLogger
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 def unhandled_register_exit(
-    uc: qemu.Uc,
-    ucthread: UcThread,
+    ctx: EmulatorContext,
     logger: GscemuLogger, 
     component: str, 
     address: int
 ) -> None:
     logger.fatal(
         f"Unhandled register 0x{address:x} in component {component} at " +
-        f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
+        f"pc=0x{ctx.uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
     )
-    halt_emulation(uc, ucthread)
+    halt_emulation(ctx.uc, ctx.ucthread)
 
 def unhandled_register_io(
     logger: GscemuLogger, 

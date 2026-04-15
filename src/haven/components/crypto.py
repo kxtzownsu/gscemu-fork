@@ -9,10 +9,9 @@ import typing
 import traceback
 import time
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import CRYPTO_REGS
 from lib.helpers import (
     unhandled_register_exit, 
     unhandled_register_io,
@@ -26,14 +25,15 @@ from .timels import (
 
 # ot_dsim package imports.
 from ot_dsim.bignum_lib.machine import Machine as CryptoEmu
-
 from ot_dsim.bignum_lib.instructions import InstructionFactory as CryptoEmuIF
 from ot_dsim.bignum_lib.instructions import InsContext as CryptoEmuICtx
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class CryptoAccelerator:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+
         self.assembler = {
             "factory": CryptoEmuIF(),
             "ins_ctx": CryptoEmuICtx()
@@ -67,11 +67,11 @@ class CryptoAccelerator:
                     #start_time = time.perf_counter()
                     if GSCEMULATOR_DISABLE_CRYPTO_ENGINE:
                         time.sleep(0.01)
-                        pend_external_irq(4)
+                        pend_external_irq(self.ctx.c_fast.m3, 4)
                         self.host_cmd = 0
                         continue
                     
-                    component_stop_timer_debug()
+                    component_stop_timer_debug(self.ctx.c_fast.timels)
                     if self.crypto_emulator is None:
                         self.crypto_emulator = CryptoEmu(
                             self.dmem_mem.copy(),
@@ -99,9 +99,9 @@ class CryptoAccelerator:
                         prints.warning(f"CRYPTO engine died :(")
 
                     self.dmem_mem = self.crypto_emulator.get_full_dmem().copy()
-                    component_start_timer_debug()
+                    component_start_timer_debug(self.ctx.c_fast.timels)
                     
-                    pend_external_irq(4)
+                    pend_external_irq(self.ctx.c_fast.m3, 4)
                     #print(time.perf_counter() - start_time)
 
                 self.opqueue.task_done()
@@ -229,7 +229,7 @@ class CryptoAccelerator:
     
     def write_int_state(self, size: int, value: int):
         if value & 0x2:
-            unpend_external_irq(4)
+            unpend_external_irq(self.ctx.c_fast.m3, 4)
     
     def read_int_enable(self, size: int, queue: queue.Queue):
         # Doesn't matter
@@ -253,57 +253,62 @@ class CryptoAccelerator:
     def write_host_cmd(self, size: int, value: int):
         self.host_cmd = (value - 0x08000000)
 
-c_emu = CryptoAccelerator()
-c_emu.start_worker()
+def init_CryptoAccelerator(ctx: EmulatorContext, regs: dict):
+    c_emu = CryptoAccelerator(ctx)
+    c_emu.start_worker()
 
-_REG_FUNC_MAP = {
-    CRYPTO_REGS["CONTROL"]: [c_emu.read_control, c_emu.write_control],
-    CRYPTO_REGS["WIPE_SECRETS"]: [
-        c_emu.read_wipe_secrets, c_emu.write_wipe_secrets
-    ],
-    CRYPTO_REGS["INT_ENABLE"]: [
-        c_emu.read_int_enable, c_emu.write_int_enable
-    ],
-    CRYPTO_REGS["INT_STATE"]: [
-        c_emu.read_int_state, c_emu.write_int_state
-    ],
-    CRYPTO_REGS["RAND_STALL_CTL"]: [
-        c_emu.read_rand_stall_ctl, c_emu.write_rand_stall_ctl
-    ],
-    CRYPTO_REGS["HOST_CMD"]: [
-        c_emu.read_host_cmd, c_emu.write_host_cmd
-    ]
-}
+    reg_fn_map = {
+        regs["CONTROL"]: [c_emu.read_control, c_emu.write_control],
+        regs["WIPE_SECRETS"]: [
+            c_emu.read_wipe_secrets, c_emu.write_wipe_secrets
+        ],
+        regs["INT_ENABLE"]: [
+            c_emu.read_int_enable, c_emu.write_int_enable
+        ],
+        regs["INT_STATE"]: [
+            c_emu.read_int_state, c_emu.write_int_state
+        ],
+        regs["RAND_STALL_CTL"]: [
+            c_emu.read_rand_stall_ctl, c_emu.write_rand_stall_ctl
+        ],
+        regs["HOST_CMD"]: [
+            c_emu.read_host_cmd, c_emu.write_host_cmd
+        ]
+    }
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, CRYPTO_REGS["IMEM_DUMMY"],
-    c_emu.read_imem, c_emu.write_imem
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["IMEM_DUMMY"],
+        c_emu.read_imem, c_emu.write_imem
+    )
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, CRYPTO_REGS["DMEM_DUMMY"],
-    c_emu.read_dmem, c_emu.write_dmem
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["DMEM_DUMMY"],
+        c_emu.read_dmem, c_emu.write_dmem
+    )
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "CRYPTO", offset)
+    def component_read_handler(
+        uc_unused: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "CRYPTO", offset)
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "CRYPTO", offset)
+    def component_write_handler(
+        uc_unused: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "CRYPTO", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )

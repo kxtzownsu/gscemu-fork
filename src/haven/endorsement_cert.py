@@ -4,7 +4,10 @@
 
 All these certificates have been extracted from the RO_A region on a production
 Cr50 chip with RMASmoke.
-https://github.com/HavenOverflow/Smiko/tree/main/src/rmasmoke
+https://github.com/HavenOverflow/Smiko/tree/main/src/rmasmoke.
+
+We require this as the Cr50 prod image compares its compiled-in public key with
+the RO_A endorsement region to verify it's a valid certificate.
 """
 
 # Doesn't really matter what this seed is.

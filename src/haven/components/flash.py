@@ -7,7 +7,7 @@ import queue
 import threading
 import time
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
 from .regdefs import FLASH_REGS
@@ -40,7 +40,9 @@ _FSH_OP_READ_BLOCK = 0x16021765
 _FSH_OP_BULK_ERASE_BANK = 0x1d1e2bad
 
 class FlashController:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+
         self.opqueue = queue.Queue()
         self.opworker = None
 
@@ -172,7 +174,7 @@ class FlashController:
         self.start_addr = self.start_addr + (self.trans_offset * 4)
         
         # All checks passed, start OP_ERASE.
-        ucmutex().mem_write(self.start_addr, b'\xff' * 0x800)
+        self.ctx.ucmutex.int32_mem_write(self.start_addr, b'\xff' * 0x800)
 
     def op_write_block(self):
         # Check if our TRANS_OFFSET is within bounds.
@@ -198,7 +200,7 @@ class FlashController:
         # Count register is zero-based, according to Cr50 source. Therefore, we
         # need to increment TRANS_SIZE by 1.
         for word in range(0, self.trans_size + 1):
-            ucmutex().int32_mem_write(
+            self.ctx.ucmutex.int32_mem_write(
                 self.start_addr + (word * 4),
                 self.wr_data[word]
             )
@@ -222,21 +224,21 @@ class FlashController:
         self.start_addr = self.start_addr + (self.trans_offset * 4)
         
         self.dout_val[self.pe_control] = (
-            ucmutex().int32_mem_read(self.start_addr)
+            self.ctx.ucmutex.int32_mem_read(self.start_addr)
         )
 
     def op_bulk_erase_bank(self):
         # Nothing much to check, because most of the values aren't used.
         
         if self.trans_mainb == 0:
-            ucmutex().mem_write(self.start_addr, b'\xff' * 0x40000)
+            self.ctx.ucmutex.mem_write(self.start_addr, b'\xff' * 0x40000)
 
         elif self.trans_mainb == 1:
             if self.protect_info1_erase:
                 self.error_code |= 128 # BIT(7), erase_failed
                 return
             
-            ucmutex().mem_write(self.start_addr, b'\xff' * 0x800)
+            self.ctx.ucmutex.mem_write(self.start_addr, b'\xff' * 0x800)
 
     def should_clear_error(self):
         # Should we clear the error_code?
@@ -361,69 +363,74 @@ class FlashController:
     def write_bulkerase_smart_algo(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "FLASH0", "BULKERASE_SMART_ALGO")
 
-c_emu = FlashController()
-c_emu.start_worker()
+def init_FlashController(ctx: EmulatorContext, regs: dict):
+    c_emu = FlashController(ctx)
+    c_emu.start_worker()
 
-_REG_FUNC_MAP = {
-    FLASH_REGS["PE_CONTROL0"]: [
-        c_emu.read_pe_control_0, c_emu.write_pe_control_0
-    ],
-    FLASH_REGS["PE_CONTROL1"]: [
-        c_emu.read_pe_control_1, c_emu.write_pe_control_1
-    ],
-    FLASH_REGS["PE_EN"]: [
-        c_emu.read_pe_en, c_emu.write_pe_en
-    ],
-    FLASH_REGS["TRANS"]: [
-        c_emu.read_trans, c_emu.write_trans
-    ],
-    FLASH_REGS["ERROR"]: [
-        c_emu.read_error, c_emu.write_error
-    ],
-    FLASH_REGS["PROTECT_INFO1_ERASE"]: [
-        c_emu.read_protect_info1_erase, c_emu.write_protect_info1_erase
-    ],
-    FLASH_REGS["DOUT_VAL0"]: [
-        c_emu.read_dout_val0, c_emu.write_dout_val0
-    ],
-    FLASH_REGS["DOUT_VAL1"]: [
-        c_emu.read_dout_val1, c_emu.write_dout_val1
-    ],
-    FLASH_REGS["PROG_SMART_ALGO"]: [
-        c_emu.read_prog_smart_algo, c_emu.write_prog_smart_algo,
-    ],
-    FLASH_REGS["ERASE_SMART_ALGO"]: [
-        c_emu.read_erase_smart_algo, c_emu.write_erase_smart_algo,
-    ],
-    FLASH_REGS["BULKERASE_SMART_ALGO"]: [
-        c_emu.read_bulkerase_smart_algo, c_emu.write_bulkerase_smart_algo,
-    ],
-}
+    reg_fn_map = {
+        regs["PE_CONTROL0"]: [
+            c_emu.read_pe_control_0, c_emu.write_pe_control_0
+        ],
+        regs["PE_CONTROL1"]: [
+            c_emu.read_pe_control_1, c_emu.write_pe_control_1
+        ],
+        regs["PE_EN"]: [
+            c_emu.read_pe_en, c_emu.write_pe_en
+        ],
+        regs["TRANS"]: [
+            c_emu.read_trans, c_emu.write_trans
+        ],
+        regs["ERROR"]: [
+            c_emu.read_error, c_emu.write_error
+        ],
+        regs["PROTECT_INFO1_ERASE"]: [
+            c_emu.read_protect_info1_erase, c_emu.write_protect_info1_erase
+        ],
+        regs["DOUT_VAL0"]: [
+            c_emu.read_dout_val0, c_emu.write_dout_val0
+        ],
+        regs["DOUT_VAL1"]: [
+            c_emu.read_dout_val1, c_emu.write_dout_val1
+        ],
+        regs["PROG_SMART_ALGO"]: [
+            c_emu.read_prog_smart_algo, c_emu.write_prog_smart_algo,
+        ],
+        regs["ERASE_SMART_ALGO"]: [
+            c_emu.read_erase_smart_algo, c_emu.write_erase_smart_algo,
+        ],
+        regs["BULKERASE_SMART_ALGO"]: [
+            c_emu.read_bulkerase_smart_algo, c_emu.write_bulkerase_smart_algo,
+        ],
+    }
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, FLASH_REGS["WR_DATA"], 
-    c_emu.read_wr_data, c_emu.write_wr_data
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["WR_DATA"], 
+        c_emu.read_wr_data, c_emu.write_wr_data
+    )
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "FLASH0", offset)
+    def component_read_handler(
+        uc_unused: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "FLASH0", offset)
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "FLASH0", offset)
+    def component_write_handler(
+        uc_unused: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "FLASH0", offset)
+            
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )

@@ -6,7 +6,8 @@ import unicorn as qemu
 import queue
 import threading
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
+from env import *
 from lib.pindevice import PinDevice, PinStatus
 from env import *
 from lib.logger import GscemuLogger
@@ -39,7 +40,9 @@ GPIO_IRQS = [
 ]
 
 class GpioController:
-    def __init__(self, num: int):
+    def __init__(self, ctx: EmulatorContext, num: int):
+        self.ctx = ctx
+        
         self.num = num
 
         self.irqnums = GPIO_IRQS[num]
@@ -96,7 +99,7 @@ class GpioController:
 
         self.gpio_pending_interrupts[bit] = True
         self.gpio_pending_interrupts_is_edge[bit] = is_edge
-        pend_external_irq(self.irqnums[0][bit])
+        pend_external_irq(self.ctx.c_fast.m3, self.irqnums[0][bit])
         self.should_pend_combined_interrupt()
 
     def _clear_pin_interrupt(self, bit: int):
@@ -106,7 +109,7 @@ class GpioController:
 
         self.gpio_pending_interrupts[bit] = False
         self.gpio_pending_interrupts_is_edge[bit] = False
-        unpend_external_irq(self.irqnums[0][bit])
+        unpend_external_irq(self.ctx.c_fast.m3, self.irqnums[0][bit])
         self.should_unpend_combined_interrupt()
 
     def _refresh_level_interrupt(self, bit: int):
@@ -188,11 +191,11 @@ class GpioController:
 
     def should_pend_combined_interrupt(self):
         if any(self.gpio_pending_interrupts):
-            pend_external_irq(self.irqnums[1])
+            pend_external_irq(self.ctx.c_fast.m3, self.irqnums[1])
 
     def should_unpend_combined_interrupt(self):
         if not any(self.gpio_pending_interrupts):
-            unpend_external_irq(self.irqnums[1])
+            unpend_external_irq(self.ctx.c_fast.m3, self.irqnums[1])
 
     def pindevice_interrupt(
             self, 
@@ -531,124 +534,68 @@ class GpioController:
     def datain_manual_write(self, bit: int, state: bool):
         self.update_gpio_level(bit, state)
 
-c_emu_0 = GpioController(0)
-c_emu_0.start_worker()
+def init_GpioController(ctx: EmulatorContext, regs: dict, num: int):
+    c_emu = GpioController(ctx, num)
+    c_emu.start_worker()
 
-c_emu_1 = GpioController(1)
-c_emu_1.start_worker()
+    reg_fn_map = {
+        regs["DATAIN"]: [c_emu.read_datain, c_emu.write_datain],
+        regs["DATAOUT"]: [c_emu.read_dataout, c_emu.write_dataout],
 
-_REG_FUNC_MAP_0 = {
-    GPIO_REGS["DATAIN"]: [c_emu_0.read_datain, c_emu_0.write_datain],
-    GPIO_REGS["DATAOUT"]: [c_emu_0.read_dataout, c_emu_0.write_dataout],
+        regs["SETDOUTEN"]: [c_emu.read_setdouten, c_emu.write_setdouten],
+        regs["CLRDOUTEN"]: [c_emu.read_clrdouten, c_emu.write_clrdouten],
 
-    GPIO_REGS["SETDOUTEN"]: [c_emu_0.read_setdouten, c_emu_0.write_setdouten],
-    GPIO_REGS["CLRDOUTEN"]: [c_emu_0.read_clrdouten, c_emu_0.write_clrdouten],
+        regs["SETINTEN"]: [c_emu.read_setinten, c_emu.write_setinten],
+        regs["CLRINTEN"]: [c_emu.read_clrinten, c_emu.write_clrinten],
 
-    GPIO_REGS["SETINTEN"]: [c_emu_0.read_setinten, c_emu_0.write_setinten],
-    GPIO_REGS["CLRINTEN"]: [c_emu_0.read_clrinten, c_emu_0.write_clrinten],
+        regs["SETINTTYPE"]: [
+            c_emu.read_setinttype, c_emu.write_setinttype
+        ],
+        regs["CLRINTTYPE"]: [
+            c_emu.read_clrinttype, c_emu.write_clrinttype
+        ],
 
-    GPIO_REGS["SETINTTYPE"]: [
-        c_emu_0.read_setinttype, c_emu_0.write_setinttype
-    ],
-    GPIO_REGS["CLRINTTYPE"]: [
-        c_emu_0.read_clrinttype, c_emu_0.write_clrinttype
-    ],
+        regs["SETINTPOL"]: [c_emu.read_setintpol, c_emu.write_setintpol],
+        regs["CLRINTPOL"]: [c_emu.read_clrintpol, c_emu.write_clrintpol],
+        
+        regs["CLRINTSTAT"]: [
+            c_emu.read_clrintstat, c_emu.write_clrintstat
+        ],
+    }
 
-    GPIO_REGS["SETINTPOL"]: [c_emu_0.read_setintpol, c_emu_0.write_setintpol],
-    GPIO_REGS["CLRINTPOL"]: [c_emu_0.read_clrintpol, c_emu_0.write_clrintpol],
-    
-    GPIO_REGS["CLRINTSTAT"]: [
-        c_emu_0.read_clrintstat, c_emu_0.write_clrintstat
-    ],
-}
+    idx_regs_to_regmap(
+        reg_fn_map, regs["MASKLOWBYTE"],
+        c_emu.read_masklowbyte, c_emu.write_masklowbyte
+    )
 
-_REG_FUNC_MAP_1 = {
-    GPIO_REGS["DATAIN"]: [c_emu_1.read_datain, c_emu_1.write_datain],
-    GPIO_REGS["DATAOUT"]: [c_emu_1.read_dataout, c_emu_1.write_dataout],
+    idx_regs_to_regmap(
+        reg_fn_map, regs["MASKHIGHBYTE"],
+        c_emu.read_maskhighbyte, c_emu.write_maskhighbyte
+    )
 
-    GPIO_REGS["SETDOUTEN"]: [c_emu_1.read_setdouten, c_emu_1.write_setdouten],
-    GPIO_REGS["CLRDOUTEN"]: [c_emu_1.read_clrdouten, c_emu_1.write_clrdouten],
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "GPIO", offset)
 
-    GPIO_REGS["SETINTEN"]: [c_emu_1.read_setinten, c_emu_1.write_setinten],
-    GPIO_REGS["CLRINTEN"]: [c_emu_1.read_clrinten, c_emu_1.write_clrinten],
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "GPIO", offset)
 
-    GPIO_REGS["SETINTTYPE"]: [
-        c_emu_1.read_setinttype, c_emu_1.write_setinttype
-    ],
-    GPIO_REGS["CLRINTTYPE"]: [
-        c_emu_1.read_clrinttype, c_emu_1.write_clrinttype
-    ],
-
-    GPIO_REGS["SETINTPOL"]: [c_emu_1.read_setintpol, c_emu_1.write_setintpol],
-    GPIO_REGS["CLRINTPOL"]: [c_emu_1.read_clrintpol, c_emu_1.write_clrintpol],
-
-    GPIO_REGS["CLRINTSTAT"]: [
-        c_emu_1.read_clrintstat, c_emu_1.write_clrintstat
-    ],
-}
-
-idx_regs_to_regmap(
-    _REG_FUNC_MAP_0, GPIO_REGS["MASKLOWBYTE"],
-    c_emu_0.read_masklowbyte, c_emu_0.write_masklowbyte
-)
-
-idx_regs_to_regmap(
-    _REG_FUNC_MAP_0, GPIO_REGS["MASKHIGHBYTE"],
-    c_emu_0.read_maskhighbyte, c_emu_0.write_maskhighbyte
-)
-
-idx_regs_to_regmap(
-    _REG_FUNC_MAP_1, GPIO_REGS["MASKLOWBYTE"],
-    c_emu_1.read_masklowbyte, c_emu_1.write_masklowbyte
-)
-
-idx_regs_to_regmap(
-    _REG_FUNC_MAP_1, GPIO_REGS["MASKHIGHBYTE"],
-    c_emu_1.read_maskhighbyte, c_emu_1.write_maskhighbyte
-)
-
-def component_read_handler_0(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu_0.queue_read_worker_op(size, _REG_FUNC_MAP_0[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "GPIO0", offset)
-
-def component_write_handler_0(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu_0.queue_write_worker_op(size, value, _REG_FUNC_MAP_0[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "GPIO0", offset)
-    
-def component_read_handler_1(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu_1.queue_read_worker_op(size, _REG_FUNC_MAP_1[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "GPIO1", offset)
-
-def component_write_handler_1(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu_1.queue_write_worker_op(size, value, _REG_FUNC_MAP_1[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "GPIO1", offset)
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )

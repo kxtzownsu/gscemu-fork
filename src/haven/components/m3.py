@@ -13,11 +13,10 @@ import unicorn as qemu
 import threading
 import queue
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
-from .regdefs import M3_REGS
 from lib.helpers import (
     unhandled_register_io, 
     unhandled_register_exit,
@@ -40,7 +39,9 @@ _EXC_RETURN_VALS = [0xFFFFFFF1, 0xFFFFFFF9, 0xFFFFFFFD]
 
 class ArmInterruptHandler:
     def __init__(self, arm_cpu):
-        self.cpu = arm_cpu # We need this to read the VTOR addr for interrupts.
+        # We need this to read the VTOR addr for interrupts.
+        self.cpu = arm_cpu
+        self.ctx = self.cpu.ctx
 
         self.intr_thread = None
         self.intr_queue = queue.Queue()
@@ -259,7 +260,7 @@ class ArmInterruptHandler:
         return
 
     def exc_return_callback(self) -> None:
-        address = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC) | 1
+        address = self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PC) | 1
         if address == _EXC_RETURN_VALS[0] or address == _EXC_RETURN_VALS[1]:
             sp_type = qemu.arm_const.UC_ARM_REG_MSP
         elif address == _EXC_RETURN_VALS[2]:
@@ -269,8 +270,8 @@ class ArmInterruptHandler:
                 f"EXC_RETURN invalid pc=0x{address:x}"
             )
 
-        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_IPSR) != 2:
-            ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_FAULTMASK, 0)
+        if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_IPSR) != 2:
+            self.ctx.ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_FAULTMASK, 0)
 
         for reg in reversed([
             qemu.arm_const.UC_ARM_REG_XPSR,
@@ -282,8 +283,8 @@ class ArmInterruptHandler:
             qemu.arm_const.UC_ARM_REG_R1,
             qemu.arm_const.UC_ARM_REG_R0,
         ]):
-            reg_val = read_u32_from_sp(ucmutex(), sp_type)
-            ucmutex().reg_write(reg, reg_val)
+            reg_val = read_u32_from_sp(self.ctx.ucmutex, sp_type)
+            self.ctx.ucmutex.reg_write(reg, reg_val)
 
     def check_for_pending_exceptions(self, pending_exceptions: dict) -> None:
         # Populate pending_exceptions with pending exceptions.
@@ -300,7 +301,7 @@ class ArmInterruptHandler:
             pending_exceptions[2] = self.nvic_sys_pri[1]
 
         # FAULTMASK is set, all exceptions disabled NMI and Reset.
-        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_FAULTMASK):
+        if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_FAULTMASK):
             return
         
         # HardFault
@@ -308,7 +309,7 @@ class ArmInterruptHandler:
             pending_exceptions[3] = self.nvic_sys_pri[2]
         
         # PRIMASK is set, only allow Reset/NMI/HardFault.
-        if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PRIMASK):
+        if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PRIMASK):
             return
         
         for exc in range(len(self.nvic_sys_pend)):
@@ -325,7 +326,7 @@ class ArmInterruptHandler:
                 pending_exceptions[irq + 16] = self.nvic_pri[irq]
 
     def get_current_exception_priority(self) -> bool:
-        current_exc_num = g_uc().reg_read(
+        current_exc_num = self.ctx.uc.reg_read(
             qemu.arm_const.UC_ARM_REG_IPSR
         )
             
@@ -386,31 +387,35 @@ class ArmInterruptHandler:
         # we are able to modify emulator state easily to handle an exception
         # and save our exception frame to the stack.
 
-        ret_pc = ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC)
+        ret_pc = self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PC)
 
         # Using a ARM instruction opcode hack, find the next pc.
         if self.intr_ctx_increment_pc:
-            ret_pc += armv7m_find_instruction_size(ucmutex(), ret_pc)
+            ret_pc += armv7m_find_instruction_size(self.ctx.ucmutex, ret_pc)
 
-        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_PC, ret_pc | 1)
+        self.ctx.ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_PC, ret_pc | 1)
 
         # Build the EXC_RETURN value based on IPSR and current SP.
         current_mode = None
         current_sp = None
         built_exc_return = None
-        if ucmutex().reg_read(
+        if self.ctx.ucmutex.reg_read(
             qemu.arm_const.UC_ARM_REG_CONTROL
         ) & 2: # thread = psp, handler = msp
-            if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_IPSR): # handler
+            if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_IPSR):
+                # handler
                 current_mode = "handler"
                 current_sp = "msp"
-            else: # thread
+            else:
+                # thread
                 current_mode = "thread"
                 current_sp = "psp"
         else: # thread = msp, handler = msp
-            if ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_IPSR): # handler
+            if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_IPSR):
+                # handler
                 current_mode = "handler"
-            else: # thread
+            else:
+                # thread
                 current_mode = "thread"
             current_sp = "msp"
 
@@ -437,28 +442,31 @@ class ArmInterruptHandler:
                     qemu.arm_const.UC_ARM_REG_R2,
                     qemu.arm_const.UC_ARM_REG_R1,
                     qemu.arm_const.UC_ARM_REG_R0]:
-            reg_val = ucmutex().reg_read(reg)
+            reg_val = self.ctx.ucmutex.reg_read(reg)
             if reg == qemu.arm_const.UC_ARM_REG_PC:
                 reg_val |= 1
-            write_u32_to_sp(ucmutex(), reg_val)
+            write_u32_to_sp(self.ctx.ucmutex, reg_val)
         
         # Place EXC_RETURN val into LR and enter handler mode by changing IPSR.
-        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_LR, built_exc_return)
-        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_IPSR, exception_num)
+        self.ctx.ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_LR, built_exc_return)
+        self.ctx.ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_IPSR, exception_num)
 
         # IT state is cleared, as documented in the ARM psuedocode
         # EPSR.IT<7:0> = Zeros(8);
-        ucmutex().reg_write(
+        self.ctx.ucmutex.reg_write(
             qemu.arm_const.UC_ARM_REG_EPSR, 
-            ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_EPSR) & ~0x600fc00
+            (
+                self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_EPSR) 
+                & ~0x600fc00
+            )
         )
 
         # Generate the handler's PC based on the VTOR address
         # VTOR addr + Exception * 4
-        exception_pc = ucmutex().int32_mem_read(
+        exception_pc = self.ctx.ucmutex.int32_mem_read(
             self.cpu.vtor + ((exception_num) * 4)
         )
-        ucmutex().reg_write(qemu.arm_const.UC_ARM_REG_PC, exception_pc)
+        self.ctx.ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_PC, exception_pc)
 
         # print(
         #     f"branching to {exception_num} at pc={exception_pc:x}, "+
@@ -548,7 +556,9 @@ class ArmInterruptHandler:
         self.nvic_pend[value & 0x1FF] = True
 
 class ArmSC300:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+
         self.mutex = FifoLock()
         self.cpuid = 0x410fc331 # Known CPUID for the ArmSC300
 
@@ -681,107 +691,112 @@ class ArmSC300:
     def write_dwt_cyccnt(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "M3", "DWT_CYCCNT")
 
-c_emu = ArmSC300()
+def init_ArmSC300(ctx: EmulatorContext, regs: dict):
+    c_emu = ArmSC300(ctx)
 
-_REG_FUNC_MAP = {
-    M3_REGS["DEMCR"]: [c_emu.read_demcr, c_emu.write_demcr],
-    M3_REGS["DWT_CTRL"]: [c_emu.read_dwt_ctrl, c_emu.write_dwt_ctrl],
-    M3_REGS["CPUID"]: [c_emu.read_cpuid, c_emu.write_cpuid],
-    M3_REGS["ITCMCR"]: [c_emu.read_itcmcr, c_emu.write_itcmcr],
-    M3_REGS["DWT_CYCCNT"]: [c_emu.read_dwt_cyccnt, c_emu.write_dwt_cyccnt],
-    M3_REGS["VTOR"]: [c_emu.read_vtor, c_emu.write_vtor],
-    M3_REGS["CCR"]: [c_emu.read_ccr, c_emu.write_ccr],
-    M3_REGS["SHSCR"]: [c_emu.read_shscr, c_emu.write_shscr],
+    reg_fn_map = {
+        regs["DEMCR"]: [c_emu.read_demcr, c_emu.write_demcr],
+        regs["DWT_CTRL"]: [c_emu.read_dwt_ctrl, c_emu.write_dwt_ctrl],
+        regs["CPUID"]: [c_emu.read_cpuid, c_emu.write_cpuid],
+        regs["ITCMCR"]: [c_emu.read_itcmcr, c_emu.write_itcmcr],
+        regs["DWT_CYCCNT"]: [c_emu.read_dwt_cyccnt, c_emu.write_dwt_cyccnt],
+        regs["VTOR"]: [c_emu.read_vtor, c_emu.write_vtor],
+        regs["CCR"]: [c_emu.read_ccr, c_emu.write_ccr],
+        regs["SHSCR"]: [c_emu.read_shscr, c_emu.write_shscr],
 
-    M3_REGS["MMFS"]: [c_emu.read_mmfs, c_emu.write_mmfs],
-    M3_REGS["BFAR"]: [c_emu.read_bfar, c_emu.write_bfar],
-    M3_REGS["MFAR"]: [c_emu.read_mfar, c_emu.write_mfar],
-    M3_REGS["HFSR"]: [c_emu.read_hfsr, c_emu.write_hfsr],
-    M3_REGS["DFSR"]: [c_emu.read_dfsr, c_emu.write_dfsr],
-}
+        regs["MMFS"]: [c_emu.read_mmfs, c_emu.write_mmfs],
+        regs["BFAR"]: [c_emu.read_bfar, c_emu.write_bfar],
+        regs["MFAR"]: [c_emu.read_mfar, c_emu.write_mfar],
+        regs["HFSR"]: [c_emu.read_hfsr, c_emu.write_hfsr],
+        regs["DFSR"]: [c_emu.read_dfsr, c_emu.write_dfsr],
+    }
 
-_INTR_FUNC_MAP = {
-    M3_REGS["NVIC_STIR"]: [c_emu.intr_op.read_stir, c_emu.intr_op.write_stir],
-}
+    intr_fn_map = {
+        regs["NVIC_STIR"]: [c_emu.intr_op.read_stir, c_emu.intr_op.write_stir],
+    }
 
-idx_regs_to_regmap(
-    _INTR_FUNC_MAP, M3_REGS["NVIC_ISER"],
-    c_emu.intr_op.read_iser, c_emu.intr_op.write_iser
-)
+    idx_regs_to_regmap(
+        intr_fn_map, regs["NVIC_ISER"],
+        c_emu.intr_op.read_iser, c_emu.intr_op.write_iser
+    )
 
-idx_regs_to_regmap(
-    _INTR_FUNC_MAP, M3_REGS["NVIC_ICER"],
-    c_emu.intr_op.read_icer, c_emu.intr_op.write_icer
-)
+    idx_regs_to_regmap(
+        intr_fn_map, regs["NVIC_ICER"],
+        c_emu.intr_op.read_icer, c_emu.intr_op.write_icer
+    )
 
-idx_regs_to_regmap(
-    _INTR_FUNC_MAP, M3_REGS["NVIC_ICPR"],
-    c_emu.intr_op.read_icpr, c_emu.intr_op.write_icpr
-)
+    idx_regs_to_regmap(
+        intr_fn_map, regs["NVIC_ICPR"],
+        c_emu.intr_op.read_icpr, c_emu.intr_op.write_icpr
+    )
 
-idx_regs_to_regmap(
-    _INTR_FUNC_MAP, M3_REGS["NVIC_IPR"],
-    c_emu.intr_op.read_ipr, c_emu.intr_op.write_ipr
-)
+    idx_regs_to_regmap(
+        intr_fn_map, regs["NVIC_IPR"],
+        c_emu.intr_op.read_ipr, c_emu.intr_op.write_ipr
+    )
 
-for k, v in _INTR_FUNC_MAP.items():
-    _REG_FUNC_MAP[k] = [
-        args_lambda_gen(c_emu.intr_op.queue_internal_read_worker_op, v[0]), 
-        args_lambda_gen(c_emu.intr_op.queue_internal_write_worker_op, v[1])
-    ]
+    for k, v in intr_fn_map.items():
+        reg_fn_map[k] = [
+            args_lambda_gen(c_emu.intr_op.queue_internal_read_worker_op, v[0]), 
+            args_lambda_gen(c_emu.intr_op.queue_internal_write_worker_op, v[1])
+        ]
 
-def exc_return_handler() -> None:
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return reg_fn_map[offset][0](size)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "M3", offset)
+
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            reg_fn_map[offset][1](size, value)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "M3", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )
+
+def exc_return_handler(c_emu: ArmSC300) -> None:
     c_emu.intr_op.queue_exc_return()
 
-def unsafe_pend_external_irq(irq: int) -> None:
+def unsafe_pend_external_irq(c_emu: ArmSC300, irq: int) -> None:
     # Only use this if we are sure that it is run in a single threaded
     # context(must be synchronous, not asynchronous with emulator)
     c_emu.intr_op.queue_unsafe_pend_external_irq(irq)
 
-def unsafe_unpend_external_irq(irq: int) -> None:
+def unsafe_unpend_external_irq(c_emu: ArmSC300, irq: int) -> None:
     # Only use this if we are sure that it is run in a single threaded
     # context(must be synchronous, not asynchronous with emulator)
     c_emu.intr_op.queue_unsafe_unpend_external_irq(irq)
 
-def unsafe_pend_sysintr(intr: int) -> None:
+def unsafe_pend_sysintr(c_emu: ArmSC300, intr: int) -> None:
     # Only use this if we are sure that it is run in a single threaded
     # context(must be synchronous, not asynchronous with emulator)
     c_emu.intr_op.queue_unsafe_pend_sysintr(intr)
 
-def pend_external_irq(irq: int) -> None:
+def pend_external_irq(c_emu: ArmSC300, irq: int) -> None:
     c_emu.intr_op.pend_external_irq(irq)
 
-def unpend_external_irq(irq: int) -> None:
+def unpend_external_irq(c_emu: ArmSC300, irq: int) -> None:
     c_emu.intr_op.unpend_external_irq(irq)
 
-def pend_svcall_interrupt() -> None:
+def pend_svcall_interrupt(c_emu: ArmSC300) -> None:
     c_emu.intr_op.queue_svcall_interrupt()
 
-def handle_externally_pended_interrupts() -> None:
+def handle_externally_pended_interrupts(c_emu: ArmSC300) -> None:
     c_emu.intr_op.handle_externally_pended_interrupts()
 
-def wait_for_interrupt() -> None:
+def wait_for_interrupt(c_emu: ArmSC300) -> None:
     c_emu.intr_op.wait_for_interrupt()
-
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return _REG_FUNC_MAP[offset][0](size)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "M3", offset)
-
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        _REG_FUNC_MAP[offset][1](size, value)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "M3", offset)

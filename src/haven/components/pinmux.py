@@ -10,24 +10,21 @@ import typing
 import unicorn as qemu
 import queue
 import threading
-import enum
-import fractions
 
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
-from lib.globalvars import *
 from lib.pindevice import PinDevice, PinStatus
 from lib.logger import GscemuLogger
 from .regdefs.pinmux_registers import *
 from lib.helpers import unhandled_register_exit, idx_regs_to_regmap
 from lib.threadutils import FifoLock
 
-from .gpio import c_emu_0 as gpio0
-from .gpio import c_emu_1 as gpio1
-
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class Cr50Pinmux:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+
         self.opthread = None
         self.opqueue = queue.Queue()
 
@@ -56,8 +53,15 @@ class Cr50Pinmux:
         for _ in range(1):
             self.resetb.append(PinDevice())
 
-        self.gpio0: list[PinDevice] = gpio0.pindevices
-        self.gpio1: list[PinDevice] = gpio1.pindevices
+        for register in ["GPIO0", "GPIO1"]:
+            if register not in ctx.components:
+                prints.fatal(
+                    "PINMUX failed to initialize! " + 
+                    "GPIO not initialized properly."
+                )
+
+        self.gpio0: list[PinDevice] = ctx.components["GPIO0"].object.pindevices
+        self.gpio1: list[PinDevice] = ctx.components["GPIO1"].object.pindevices
 
         # Stored values just for the sake of register readback, although never
         # used in the Cr50(maybe in the BootROM/RO for register verification?)
@@ -294,45 +298,50 @@ class Cr50Pinmux:
         self.hold = value
         return
 
-c_emu = Cr50Pinmux()
-c_emu.start_worker()
+def init_Cr50Pinmux(ctx: EmulatorContext, regs: dict):
+    c_emu = Cr50Pinmux(ctx)
+    c_emu.start_worker()
 
-_REG_FUNC_MAP = {
-    PINMUX_REGS["EXITEN0"]: [c_emu.read_exiten0, c_emu.write_exiten0],
-    PINMUX_REGS["EXITEDGE0"]: [c_emu.read_exitedge0, c_emu.write_exitedge0],
-    PINMUX_REGS["EXITINV0"]: [c_emu.read_exitinv0, c_emu.write_exitinv0],
-    PINMUX_REGS["HOLD"]: [c_emu.read_hold, c_emu.write_hold],
-}
+    reg_fn_map = {
+        regs["EXITEN0"]: [c_emu.read_exiten0, c_emu.write_exiten0],
+        regs["EXITEDGE0"]: [c_emu.read_exitedge0, c_emu.write_exitedge0],
+        regs["EXITINV0"]: [c_emu.read_exitinv0, c_emu.write_exitinv0],
+        regs["HOLD"]: [c_emu.read_hold, c_emu.write_hold],
+    }
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, PINMUX_SEL_REGS_LIST,
-    c_emu.read_sel, c_emu.write_sel
-)
+    idx_regs_to_regmap(
+        reg_fn_map, PINMUX_SEL_REGS_LIST,
+        c_emu.read_sel, c_emu.write_sel
+    )
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, PINMUX_CTL_REGS_LIST,
-    c_emu.read_ctl, c_emu.write_ctl
-)
+    idx_regs_to_regmap(
+        reg_fn_map, PINMUX_CTL_REGS_LIST,
+        c_emu.read_ctl, c_emu.write_ctl
+    )
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "PINMUX", offset)
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "PINMUX", offset)
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "PINMUX", offset)
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "PINMUX", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )

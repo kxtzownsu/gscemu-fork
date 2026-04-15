@@ -15,17 +15,18 @@ import typing
 import unicorn as qemu
 import queue
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
 from lib.helpers import unhandled_register_exit
-from .regdefs import SWDP_REGS
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class ARMSoftwareDebugPort:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+
         self.opmutex = FifoLock()
 
         # These registers were only used on the FPGA board, on real silicon 
@@ -55,35 +56,40 @@ class ARMSoftwareDebugPort:
     def write_p4_last_sync(self, size: int, value: int):
         return
 
-c_emu = ARMSoftwareDebugPort()
+def init_ARMSoftwareDebugPort(ctx: EmulatorContext, regs: dict):
+    c_emu = ARMSoftwareDebugPort(ctx)
 
-_REG_FUNC_MAP = {
-    SWDP_REGS["BUILD_DATE"]: [c_emu.read_build_date, c_emu.write_build_date],
-    SWDP_REGS["BUILD_TIME"]: [c_emu.read_build_time, c_emu.write_build_time],
-    SWDP_REGS["P4_LAST_SYNC"]: [
-        c_emu.read_p4_last_sync, c_emu.write_p4_last_sync
-    ],
-}
+    reg_fn_map = {
+        regs["BUILD_DATE"]: [c_emu.read_build_date, c_emu.write_build_date],
+        regs["BUILD_TIME"]: [c_emu.read_build_time, c_emu.write_build_time],
+        regs["P4_LAST_SYNC"]: [
+            c_emu.read_p4_last_sync, c_emu.write_p4_last_sync
+        ],
+    }
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return _REG_FUNC_MAP[offset][0](size)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "SWDP0", offset)
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return reg_fn_map[offset][0](size)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "SWDP0", offset)
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        _REG_FUNC_MAP[offset][1](size, value)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "SWDP0", offset)
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            reg_fn_map[offset][1](size, value)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "SWDP0", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )

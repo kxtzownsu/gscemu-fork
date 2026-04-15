@@ -18,16 +18,17 @@ import unicorn as qemu
 import queue
 import threading
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import SPS_REGS
 from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class SPISlaveDevice:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+
         self.opthread = None
         self.opqueue = queue.Queue()
 
@@ -132,41 +133,46 @@ class SPISlaveDevice:
 
     def write_rxfifo_threshold(self, size: int, value: int):
         self.rxfifo_threshold = value
-      
-c_emu = SPISlaveDevice()
-c_emu.start_worker()
 
-_REG_FUNC_MAP = {
-    SPS_REGS["CTRL"]: [c_emu.read_ctrl, c_emu.write_ctrl],
-    SPS_REGS["DUMMY_WORD"]: [c_emu.read_dummy_word, c_emu.write_dummy_word],
-    SPS_REGS["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl],
-    SPS_REGS["ISTATE"]: [c_emu.read_istate, c_emu.write_istate],
-    SPS_REGS["ISTATE_CLR"]: [c_emu.read_istate_clr, c_emu.write_istate_clr],
-    SPS_REGS["FIFO_CTRL"]: [c_emu.read_fifo_ctrl, c_emu.write_fifo_ctrl],
-    SPS_REGS["RXFIFO_THRESHOLD"]: [
-        c_emu.read_rxfifo_threshold, c_emu.write_rxfifo_threshold
-    ],
-}
+def init_SPISlaveDevice(ctx: EmulatorContext, regs: dict):
+    c_emu = SPISlaveDevice(ctx)
+    c_emu.start_worker()
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "SPS0", offset)
+    reg_fn_map = {
+        regs["CTRL"]: [c_emu.read_ctrl, c_emu.write_ctrl],
+        regs["DUMMY_WORD"]: [c_emu.read_dummy_word, c_emu.write_dummy_word],
+        regs["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl],
+        regs["ISTATE"]: [c_emu.read_istate, c_emu.write_istate],
+        regs["ISTATE_CLR"]: [c_emu.read_istate_clr, c_emu.write_istate_clr],
+        regs["FIFO_CTRL"]: [c_emu.read_fifo_ctrl, c_emu.write_fifo_ctrl],
+        regs["RXFIFO_THRESHOLD"]: [
+            c_emu.read_rxfifo_threshold, c_emu.write_rxfifo_threshold
+        ],
+    }
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "SPS0", offset)
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "SPS0", offset)
+
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "SPS0", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )

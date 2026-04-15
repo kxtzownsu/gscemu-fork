@@ -4,9 +4,9 @@
 All register values derived from
 https://chromium.googlesource.com/chromiumos/platform/ec/+/a766634/chip/g/hw_regdefs.h
 """
-
-from lib.globalvars import *
 from lib.helpers import pattern_list_gen as reg_list
+
+DEFAULT_REG_WIDTH = 0x10000
 
 REG_DEFS = {
     # Although this is FLASH, this region is immutable. On real silicon,

@@ -7,7 +7,6 @@ import unicorn as qemu
 import queue
 import threading
 
-from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 from .regdefs import XX_REGS

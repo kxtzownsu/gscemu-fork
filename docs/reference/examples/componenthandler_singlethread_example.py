@@ -6,7 +6,6 @@ import typing
 import unicorn as qemu
 import queue
 
-from lib.globalvars import *
 from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock

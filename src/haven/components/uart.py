@@ -7,17 +7,18 @@ import queue
 import threading
 import sys
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import UART_REGS
 from lib.helpers import unhandled_register_exit, unhandled_register_io
 from .m3 import pend_external_irq, unpend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class UartController:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+
         self.opthread = None
         self.opqueue = queue.Queue()
 
@@ -42,7 +43,7 @@ class UartController:
                     self.state |= 128 # BIT(7), True
                 else:
                     self.state &= ~128 # BIT(7), False
-                    pend_external_irq(174)
+                    pend_external_irq(self.ctx.c_fast.m3, 174)
 
                 if target_fn:
                     target_fn(*args) # Splat the arguments into the target_fn
@@ -174,48 +175,53 @@ class UartController:
     def write_istateclr(self, size: int, value: int) -> None:
         if value & 1:
             # TX_INT
-            unpend_external_irq(177)
+            unpend_external_irq(self.ctx.c_fast.m3, 177)
 
         if value & 2:
             # RX_INT
-            unpend_external_irq(174)
+            unpend_external_irq(self.ctx.c_fast.m3, 174)
 
-c_emu = UartController()
-c_emu.start_worker()
+def init_UartController(ctx: EmulatorContext, regs: dict):
+    c_emu = UartController(ctx)
+    c_emu.start_worker()
 
-_REG_FUNC_MAP = {
-    UART_REGS["WDATA"]: [c_emu.read_wdata, c_emu.write_wdata],
-    UART_REGS["NCO"]: [c_emu.read_nco, c_emu.write_nco],
-    UART_REGS["CTRL"]: [c_emu.read_ctrl, c_emu.write_ctrl],
-    UART_REGS["STATE"]: [c_emu.read_state, c_emu.write_state],
-    UART_REGS["RDATA"]: [c_emu.read_rdata, c_emu.write_rdata],
-    UART_REGS["FIFO"]: [c_emu.read_fifo, c_emu.write_fifo],
-    UART_REGS["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl],
-    UART_REGS["ISTATECLR"]: [c_emu.read_istateclr, c_emu.write_istateclr],
-}
+    reg_fn_map = {
+        regs["WDATA"]: [c_emu.read_wdata, c_emu.write_wdata],
+        regs["NCO"]: [c_emu.read_nco, c_emu.write_nco],
+        regs["CTRL"]: [c_emu.read_ctrl, c_emu.write_ctrl],
+        regs["STATE"]: [c_emu.read_state, c_emu.write_state],
+        regs["RDATA"]: [c_emu.read_rdata, c_emu.write_rdata],
+        regs["FIFO"]: [c_emu.read_fifo, c_emu.write_fifo],
+        regs["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl],
+        regs["ISTATECLR"]: [c_emu.read_istateclr, c_emu.write_istateclr],
+    }
 
-def cr50_uart_input(unicode_char_code: int) -> None:
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "UART0", offset)
+
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "UART0", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )
+
+def cr50_uart_input(c_emu: UartController, unicode_char_code: int) -> None:
     c_emu.queued_uart_input(unicode_char_code)
-
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "UART0", offset)
-
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "UART0", offset)

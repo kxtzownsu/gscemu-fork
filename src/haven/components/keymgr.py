@@ -19,11 +19,10 @@ import hashlib
 import hmac
 from Crypto.Cipher import AES as domeAES
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.threadutils import FifoLock
 from lib.logger import GscemuLogger
-from .regdefs import KEYMGR_REGS
 from lib.helpers import (
     unhandled_register_io, 
     unhandled_register_exit,
@@ -34,7 +33,9 @@ from lib.helpers import (
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class ShaEngine:
-    def __init__(self):
+    def __init__(self, ctx):
+        self.ctx = ctx
+        
         self.opqueue = queue.Queue()
         self.opthread = None
 
@@ -339,7 +340,8 @@ class ShaEngine:
         self.use_cert["CHECK_ONLY"] = (value & 0x80) >> 0x7
 
 class AesEngine:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
         self.opqueue = queue.Queue()
         self.opthread = None
 
@@ -721,10 +723,12 @@ class AesEngine:
         self.use_hidden_key = value
 
 class KeymgrController:
-    def __init__(self):
+    def __init__(self, ctx):
+        self.ctx = ctx
+
         self.mutex = FifoLock() # Only use this for KeyManager specific ops.
-        self.shaengine = ShaEngine()
-        self.aesengine = AesEngine()
+        self.shaengine = ShaEngine(ctx)
+        self.aesengine = AesEngine(ctx)
 
         self.cert_revoke_ctrl = [
             0xa8028a82, 0xaaaaaaaa, 0xaaaa
@@ -838,221 +842,225 @@ class KeymgrController:
         # that for now.
         pass
 
-c_emu = KeymgrController()
+def init_KeymgrController(ctx: EmulatorContext, regs: dict):
+    c_emu = KeymgrController(ctx)
 
-_REG_FUNC_MAP = {
-    KEYMGR_REGS["FWR_VLD"]: [
-        c_emu.read_fwr_vld,
-        c_emu.write_fwr_vld,
-    ],
-    KEYMGR_REGS["RWR_VLD"]: [
-        c_emu.read_rwr_vld,
-        c_emu.write_rwr_vld,
-    ],
-    KEYMGR_REGS["FWR_LOCK"]: [
-        c_emu.read_fwr_lock,
-        c_emu.write_fwr_lock,
-    ],
-    KEYMGR_REGS["RWR_LOCK"]: [
-        c_emu.read_rwr_lock,
-        c_emu.write_rwr_lock,
-    ],
-    KEYMGR_REGS["HKEY_ERR_FLAGS"]: [
-        c_emu.read_hkey_err_flags,
-        c_emu.write_hkey_err_flags,
-    ],
-    KEYMGR_REGS["FW_MAJOR_VERSION"]: [
-        c_emu.read_fw_major_version,
-        c_emu.write_fw_major_version,
-    ],
-}
+    reg_fn_map = {
+        regs["FWR_VLD"]: [
+            c_emu.read_fwr_vld,
+            c_emu.write_fwr_vld,
+        ],
+        regs["RWR_VLD"]: [
+            c_emu.read_rwr_vld,
+            c_emu.write_rwr_vld,
+        ],
+        regs["FWR_LOCK"]: [
+            c_emu.read_fwr_lock,
+            c_emu.write_fwr_lock,
+        ],
+        regs["RWR_LOCK"]: [
+            c_emu.read_rwr_lock,
+            c_emu.write_rwr_lock,
+        ],
+        regs["HKEY_ERR_FLAGS"]: [
+            c_emu.read_hkey_err_flags,
+            c_emu.write_hkey_err_flags,
+        ],
+        regs["FW_MAJOR_VERSION"]: [
+            c_emu.read_fw_major_version,
+            c_emu.write_fw_major_version,
+        ],
+    }
 
-_SHAENGINE_FUNC_MAP = {
-    KEYMGR_REGS["SHA"]["CFG"]["MSGLEN_LO"]: [
-        c_emu.shaengine.read_cfg_msglen_lo,
-        c_emu.shaengine.write_cfg_msglen_lo,
-    ],
-    KEYMGR_REGS["SHA"]["CFG"]["MSGLEN_HI"]: [
-        c_emu.shaengine.read_cfg_msglen_hi,
-        c_emu.shaengine.write_cfg_msglen_hi,        
-    ],
-    KEYMGR_REGS["SHA"]["CFG"]["EN"]: [
-        c_emu.shaengine.read_cfg_en,
-        c_emu.shaengine.write_cfg_en,   
-    ],
-    KEYMGR_REGS["SHA"]["CFG"]["WR_EN"]: [
-        c_emu.shaengine.read_cfg_wr_en,
-        c_emu.shaengine.write_cfg_wr_en,   
-    ],
-    KEYMGR_REGS["SHA"]["TRIG"]: [
-        c_emu.shaengine.read_trig,
-        c_emu.shaengine.write_trig,   
-    ],
-    KEYMGR_REGS["SHA"]["INPUT_FIFO"]: [
-        c_emu.shaengine.read_input_fifo,
-        c_emu.shaengine.write_input_fifo,   
-    ],
-    KEYMGR_REGS["SHA"]["ITOP"]: [
-        c_emu.shaengine.read_itop,
-        c_emu.shaengine.write_itop,   
-    ],
-    KEYMGR_REGS["SHA"]["USE_CERT"]: [
-        c_emu.shaengine.read_use_cert,
-        c_emu.shaengine.write_use_cert,   
-    ],
-    KEYMGR_REGS["SHA"]["CERT_OVERRIDE"]: [
-        c_emu.shaengine.read_cert_override,
-        c_emu.shaengine.write_cert_override,
-    ],
-    KEYMGR_REGS["SHA"]["RAND_STALL_CTL"]: [
-        c_emu.shaengine.read_rand_stall_ctl,
-        c_emu.shaengine.write_rand_stall_ctl,
-    ],
-    KEYMGR_REGS["SHA"]["USE_HIDDEN_KEY"]: [
-        c_emu.shaengine.read_use_hidden_key,
-        c_emu.shaengine.write_use_hidden_key,
-    ]
-}
+    shaengine_fn_map = {
+        regs["SHA"]["CFG"]["MSGLEN_LO"]: [
+            c_emu.shaengine.read_cfg_msglen_lo,
+            c_emu.shaengine.write_cfg_msglen_lo,
+        ],
+        regs["SHA"]["CFG"]["MSGLEN_HI"]: [
+            c_emu.shaengine.read_cfg_msglen_hi,
+            c_emu.shaengine.write_cfg_msglen_hi,        
+        ],
+        regs["SHA"]["CFG"]["EN"]: [
+            c_emu.shaengine.read_cfg_en,
+            c_emu.shaengine.write_cfg_en,   
+        ],
+        regs["SHA"]["CFG"]["WR_EN"]: [
+            c_emu.shaengine.read_cfg_wr_en,
+            c_emu.shaengine.write_cfg_wr_en,   
+        ],
+        regs["SHA"]["TRIG"]: [
+            c_emu.shaengine.read_trig,
+            c_emu.shaengine.write_trig,   
+        ],
+        regs["SHA"]["INPUT_FIFO"]: [
+            c_emu.shaengine.read_input_fifo,
+            c_emu.shaengine.write_input_fifo,   
+        ],
+        regs["SHA"]["ITOP"]: [
+            c_emu.shaengine.read_itop,
+            c_emu.shaengine.write_itop,   
+        ],
+        regs["SHA"]["USE_CERT"]: [
+            c_emu.shaengine.read_use_cert,
+            c_emu.shaengine.write_use_cert,   
+        ],
+        regs["SHA"]["CERT_OVERRIDE"]: [
+            c_emu.shaengine.read_cert_override,
+            c_emu.shaengine.write_cert_override,
+        ],
+        regs["SHA"]["RAND_STALL_CTL"]: [
+            c_emu.shaengine.read_rand_stall_ctl,
+            c_emu.shaengine.write_rand_stall_ctl,
+        ],
+        regs["SHA"]["USE_HIDDEN_KEY"]: [
+            c_emu.shaengine.read_use_hidden_key,
+            c_emu.shaengine.write_use_hidden_key,
+        ]
+    }
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, KEYMGR_REGS["HKEY_RWR"],
-    c_emu.read_hkey_rwr, c_emu.write_hkey_rwr
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["HKEY_RWR"],
+        c_emu.read_hkey_rwr, c_emu.write_hkey_rwr
+    )
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, KEYMGR_REGS["HKEY_FWR"],
-    c_emu.read_hkey_fwr, c_emu.write_hkey_fwr
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["HKEY_FWR"],
+        c_emu.read_hkey_fwr, c_emu.write_hkey_fwr
+    )
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, KEYMGR_REGS["HKEY_FRR"],
-    c_emu.read_hkey_frr, c_emu.write_hkey_frr
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["HKEY_FRR"],
+        c_emu.read_hkey_frr, c_emu.write_hkey_frr
+    )
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, KEYMGR_REGS["CERT_REVOKE_CTRL"],
-    c_emu.read_cert_revoke_ctrl, c_emu.write_cert_revoke_ctrl
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["CERT_REVOKE_CTRL"],
+        c_emu.read_cert_revoke_ctrl, c_emu.write_cert_revoke_ctrl
+    )
 
-idx_regs_to_regmap(
-    _SHAENGINE_FUNC_MAP, KEYMGR_REGS["SHA"]["STS_H"],
-    c_emu.shaengine.read_sts_h, c_emu.shaengine.write_sts_h
-)
+    idx_regs_to_regmap(
+        shaengine_fn_map, regs["SHA"]["STS_H"],
+        c_emu.shaengine.read_sts_h, c_emu.shaengine.write_sts_h
+    )
 
-idx_regs_to_regmap(
-    _SHAENGINE_FUNC_MAP, KEYMGR_REGS["SHA"]["KEY_W"],
-    c_emu.shaengine.read_key_w, c_emu.shaengine.write_key_w
-)
+    idx_regs_to_regmap(
+        shaengine_fn_map, regs["SHA"]["KEY_W"],
+        c_emu.shaengine.read_key_w, c_emu.shaengine.write_key_w
+    )
 
-for k, v in _SHAENGINE_FUNC_MAP.items():
-    _REG_FUNC_MAP[k] = [
-        args_lambda_gen(c_emu.shaengine.queue_read_worker_op, v[0]),
-        args_lambda_gen(c_emu.shaengine.queue_write_worker_op, v[1])
-    ]
+    for k, v in shaengine_fn_map.items():
+        reg_fn_map[k] = [
+            args_lambda_gen(c_emu.shaengine.queue_read_worker_op, v[0]),
+            args_lambda_gen(c_emu.shaengine.queue_write_worker_op, v[1])
+        ]
 
-_AESENGINE_FUNC_MAP = {
-    KEYMGR_REGS["AES"]["CTRL"]: [
-        c_emu.aesengine.read_ctrl,
-        c_emu.aesengine.write_ctrl
-    ],
-    KEYMGR_REGS["AES"]["WFIFO_DATA"]: [
-        c_emu.aesengine.read_wfifo,
-        c_emu.aesengine.write_wfifo
-    ],
-    KEYMGR_REGS["AES"]["RFIFO_DATA"]: [
-        c_emu.aesengine.read_rfifo,
-        c_emu.aesengine.write_rfifo
-    ],
-    KEYMGR_REGS["AES"]["KEY_START"]: [
-        c_emu.aesengine.read_key_start,
-        c_emu.aesengine.write_key_start
-    ],
-    KEYMGR_REGS["AES"]["RAND_STALL_CTL"]: [
-        c_emu.aesengine.read_rand_stall,
-        c_emu.aesengine.write_rand_stall
-    ],
-    KEYMGR_REGS["AES"]["WFIFO_LEVEL"]: [
-        c_emu.aesengine.read_wfifo_level,
-        c_emu.aesengine.write_wfifo_level
-    ],
-    KEYMGR_REGS["AES"]["WFIFO_FULL"]: [
-        c_emu.aesengine.read_wfifo_full,
-        c_emu.aesengine.write_wfifo_full
-    ],
-    KEYMGR_REGS["AES"]["RFIFO_LEVEL"]: [
-        c_emu.aesengine.read_rfifo_level,
-        c_emu.aesengine.write_rfifo_level
-    ],
-    KEYMGR_REGS["AES"]["RFIFO_EMPTY"]: [
-        c_emu.aesengine.read_rfifo_empty,
-        c_emu.aesengine.write_rfifo_empty
-    ],
-    KEYMGR_REGS["AES"]["GCM_DO_ACC"]: [
-        c_emu.aesengine.read_gcm_do_acc,
-        c_emu.aesengine.write_gcm_do_acc
-    ],
-    KEYMGR_REGS["AES"]["WIPE_SECRETS"]: [
-        c_emu.aesengine.read_wipe_secrets,
-        c_emu.aesengine.write_wipe_secrets
-    ],
-    KEYMGR_REGS["AES"]["USE_HIDDEN_KEY"]: [
-        c_emu.aesengine.read_use_hidden_key,
-        c_emu.aesengine.write_use_hidden_key
-    ],   
-}
+    aesengine_fn_map = {
+        regs["AES"]["CTRL"]: [
+            c_emu.aesengine.read_ctrl,
+            c_emu.aesengine.write_ctrl
+        ],
+        regs["AES"]["WFIFO_DATA"]: [
+            c_emu.aesengine.read_wfifo,
+            c_emu.aesengine.write_wfifo
+        ],
+        regs["AES"]["RFIFO_DATA"]: [
+            c_emu.aesengine.read_rfifo,
+            c_emu.aesengine.write_rfifo
+        ],
+        regs["AES"]["KEY_START"]: [
+            c_emu.aesengine.read_key_start,
+            c_emu.aesengine.write_key_start
+        ],
+        regs["AES"]["RAND_STALL_CTL"]: [
+            c_emu.aesengine.read_rand_stall,
+            c_emu.aesengine.write_rand_stall
+        ],
+        regs["AES"]["WFIFO_LEVEL"]: [
+            c_emu.aesengine.read_wfifo_level,
+            c_emu.aesengine.write_wfifo_level
+        ],
+        regs["AES"]["WFIFO_FULL"]: [
+            c_emu.aesengine.read_wfifo_full,
+            c_emu.aesengine.write_wfifo_full
+        ],
+        regs["AES"]["RFIFO_LEVEL"]: [
+            c_emu.aesengine.read_rfifo_level,
+            c_emu.aesengine.write_rfifo_level
+        ],
+        regs["AES"]["RFIFO_EMPTY"]: [
+            c_emu.aesengine.read_rfifo_empty,
+            c_emu.aesengine.write_rfifo_empty
+        ],
+        regs["AES"]["GCM_DO_ACC"]: [
+            c_emu.aesengine.read_gcm_do_acc,
+            c_emu.aesengine.write_gcm_do_acc
+        ],
+        regs["AES"]["WIPE_SECRETS"]: [
+            c_emu.aesengine.read_wipe_secrets,
+            c_emu.aesengine.write_wipe_secrets
+        ],
+        regs["AES"]["USE_HIDDEN_KEY"]: [
+            c_emu.aesengine.read_use_hidden_key,
+            c_emu.aesengine.write_use_hidden_key
+        ],   
+    }
 
-idx_regs_to_regmap(
-    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["KEY"],
-    c_emu.aesengine.read_key, c_emu.aesengine.write_key
-)
+    idx_regs_to_regmap(
+        aesengine_fn_map, regs["AES"]["KEY"],
+        c_emu.aesengine.read_key, c_emu.aesengine.write_key
+    )
 
-idx_regs_to_regmap(
-    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["CTR"],
-    c_emu.aesengine.read_ctr, c_emu.aesengine.write_ctr
-)
-
-
-idx_regs_to_regmap(
-    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["GCM_H"],
-    c_emu.aesengine.read_gcm_h, c_emu.aesengine.write_gcm_h
-)
-
-idx_regs_to_regmap(
-    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["GCM_MAC"],
-    c_emu.aesengine.read_gcm_mac, c_emu.aesengine.write_gcm_mac
-)
-
-idx_regs_to_regmap(
-    _AESENGINE_FUNC_MAP, KEYMGR_REGS["AES"]["GCM_HASH_IN"],
-    c_emu.aesengine.read_gcm_hash_in, c_emu.aesengine.write_gcm_hash_in
-)
+    idx_regs_to_regmap(
+        aesengine_fn_map, regs["AES"]["CTR"],
+        c_emu.aesengine.read_ctr, c_emu.aesengine.write_ctr
+    )
 
 
-for k, v in _AESENGINE_FUNC_MAP.items():
-    _REG_FUNC_MAP[k] = [
-        args_lambda_gen(c_emu.aesengine.queue_read_worker_op, v[0]),
-        args_lambda_gen(c_emu.aesengine.queue_write_worker_op, v[1])
-    ]
+    idx_regs_to_regmap(
+        aesengine_fn_map, regs["AES"]["GCM_H"],
+        c_emu.aesengine.read_gcm_h, c_emu.aesengine.write_gcm_h
+    )
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return _REG_FUNC_MAP[offset][0](size)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "KEYMGR0", offset)
+    idx_regs_to_regmap(
+        aesengine_fn_map, regs["AES"]["GCM_MAC"],
+        c_emu.aesengine.read_gcm_mac, c_emu.aesengine.write_gcm_mac
+    )
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        _REG_FUNC_MAP[offset][1](size, value)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "KEYMGR0", offset)
+    idx_regs_to_regmap(
+        aesengine_fn_map, regs["AES"]["GCM_HASH_IN"],
+        c_emu.aesengine.read_gcm_hash_in, c_emu.aesengine.write_gcm_hash_in
+    )
+
+    for k, v in aesengine_fn_map.items():
+        reg_fn_map[k] = [
+            args_lambda_gen(c_emu.aesengine.queue_read_worker_op, v[0]),
+            args_lambda_gen(c_emu.aesengine.queue_write_worker_op, v[1])
+        ]
+
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return reg_fn_map[offset][0](size)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "KEYMGR", offset)
+
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            reg_fn_map[offset][1](size, value)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "KEYMGR", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )

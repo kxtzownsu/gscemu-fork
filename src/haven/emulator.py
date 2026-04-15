@@ -24,14 +24,15 @@ The H1B3C's CPU runs off the Cortex-M3 armv7m spec.
 import traceback
 import unicorn as qemu
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext
+from .c_fastlookup import ComponentFastLookup
 from .init_utils import *
 from .pinmux_config import *
 from . import hooks
 from .components.regdefs import REG_DEFS, MMIO_REG_DEFS
 from lib.logger import GscemuLogger
+from .mmio_map import initialize_components
 
-from .components.m3 import c_emu as m3_emu
 from .components.uart import cr50_uart_input
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
@@ -63,38 +64,59 @@ class Emulator:
             qemu.UC_MODE_THUMB | qemu.UC_MODE_MCLASS,
             qemu.arm_const.UC_CPU_ARM_CORTEX_M3
         )
-        
-        # Assign the global uc variable to our created Uc object. This is
-        # accessible through g_uc(). This also creates the UcMutex, accessible 
-        # through ucmutex().
-        assign_global_uc(self.uc)
+
+        # Initialize EmulatorContext so that the unicorn engine class can be 
+        # passed to other classes and other components.
+        self.ctx = EmulatorContext(self.uc)
+
+        # Fast lookup, dictionaries are inefficient over time compared to a 
+        # direct pointer.
+        self.ctx.c_fast = ComponentFastLookup()
         
         # TODO(appleflyer): increase the debugability of the init process.
 
-        if not map_memory(REG_DEFS, MMIO_REG_DEFS):
+        initialize_components(self.ctx)
+
+        if not map_memory(self.ctx, REG_DEFS, MMIO_REG_DEFS):
             prints.fatal("Failed to map memory during init process!")
             return
         
-        prepare_flash_space()
+        # On the Cr50, the program flash is filled with FFs. We know this as
+        # dumping the entire program flash reveals the unused portions are
+        # FFed out. This is also confirmed in the Cr50 FLASH driver code where
+        # it states that bits can only be set to 0 from 1, and re-setting
+        # a bit to 1 requires that page to be wiped.
+        prepare_flash_space(self.ctx)
 
+        # Now, load the program/firmware into the program flash.
         if not load_firmware(
-                REG_DEFS, 
-                fw_paths, 
-                strict_fw_size_checks,
+            self.ctx,
+            REG_DEFS, 
+            fw_paths, 
+            strict_fw_size_checks,
         ):
             prints.fatal("Failed to load firmware during init process.")
             return
         
-        install_tpm_endorsement_certs()
+        install_tpm_endorsement_certs(self.ctx)
 
-        init_strap_config()
-        init_custom_board_pinmux_features()
+        init_strap_config(self.ctx)
+        init_custom_board_pinmux_features(self.ctx)
         
-        g_uc().hook_add(qemu.UC_HOOK_INTR, hooks.intr_hook)
+        self.ctx.uc.hook_add(
+            qemu.UC_HOOK_INTR, hooks.intr_hook, user_data=self.ctx
+        )
         
         # We need to also capture invalid memory accesses to trigger
         # exceptions.
-        g_uc().hook_add(UNICORN_MEM_INVALID_HOOKS, hooks.mem_invalid_access)
+        self.ctx.uc.hook_add(
+            (
+                qemu.UC_HOOK_MEM_READ_UNMAPPED |
+                qemu.UC_HOOK_MEM_WRITE_UNMAPPED |
+                qemu.UC_HOOK_MEM_FETCH_UNMAPPED
+            ), 
+            hooks.mem_invalid_access, user_data=self.ctx
+        )
 
         # On an external interrupt, we shouldn't just branch to the interrupt
         # directly. We need to wait until we are in a defined emulator state.
@@ -109,12 +131,15 @@ class Emulator:
         #
         # Albeit slow, this is the only way to fix the issue at this current
         # point in time.
-        g_uc().hook_add(qemu.UC_HOOK_BLOCK, hooks.m3_interrupt_safe_point)
+        self.ctx.uc.hook_add(
+            qemu.UC_HOOK_BLOCK, 
+            hooks.m3_interrupt_safe_point, user_data=self.ctx
+        )
 
         # We need to manually handle the wfi instruction as our interrupt
         # handler is here.
-        g_uc().hook_add(
-            qemu.UC_HOOK_INSN, hooks.handle_wfi_instruction, None, 
+        self.ctx.uc.hook_add(
+            qemu.UC_HOOK_INSN, hooks.handle_wfi_instruction, self.ctx, 
             1, 0, qemu.arm_const.UC_ARM_INS_WFI
         )
 
@@ -122,14 +147,16 @@ class Emulator:
             self.pc_logger = open(
                 GSCEMULATOR_PC_LOGGING_SETTINGS["log_file_path"], "w"
             )
-            g_uc().hook_add(qemu.UC_HOOK_CODE, hooks.pc_logger, self.pc_logger)
+            self.ctx.uc.hook_add(
+                qemu.UC_HOOK_CODE, hooks.pc_logger, self.pc_logger
+            )
         
         # Call this after the emulator has finished initializing.
         self.initialized = True
         prints.info("Emulator initialization success!")
 
     def uart_input(self, input: int) -> None:
-        cr50_uart_input(input)
+        cr50_uart_input(self.ctx.c_fast.uart0, input)
 
     def start_emulation(self) -> None:
         """Run the emulator."""
@@ -147,22 +174,22 @@ class Emulator:
         # We need to load the emulator with the correct pc & sp values before
         # we start the emulator.
         entry_sp = int.from_bytes(
-            g_uc().mem_read(self.init_vtor_val + 0x0, 0x4), 
+            self.ctx.uc.mem_read(self.init_vtor_val + 0x0, 0x4), 
             'little'
         )
         entry_pc = int.from_bytes(
-            g_uc().mem_read(self.init_vtor_val + 0x4, 0x4), 
+            self.ctx.uc.mem_read(self.init_vtor_val + 0x4, 0x4), 
             'little'
         )
 
         prints.debug(f"VTOR: pc=0x{entry_pc:x}, sp=0x{entry_sp:x}")
-        g_uc().reg_write(qemu.arm_const.UC_ARM_REG_SP, entry_sp)
-        g_uc().reg_write(qemu.arm_const.UC_ARM_REG_PC, entry_pc)
+        self.ctx.uc.reg_write(qemu.arm_const.UC_ARM_REG_SP, entry_sp)
+        self.ctx.uc.reg_write(qemu.arm_const.UC_ARM_REG_PC, entry_pc)
     
         prints.debug("Starting emulation at " +
                      f"pc=0x{entry_pc:x}")
         
         # Start the CYCCNT timer to count how many cycles have elapsed.
-        m3_emu.start_cyccnt_time()
+        self.ctx.components["M3"].object.start_cyccnt_time()
 
-        ucthread().emu_start()
+        self.ctx.ucthread.emu_start()

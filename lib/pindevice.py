@@ -6,7 +6,6 @@ import typing
 import enum
 
 from env import *
-from lib.globalvars import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
 

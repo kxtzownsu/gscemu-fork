@@ -11,7 +11,7 @@ to the user. We could make a seperate class in the future instead?
 import typing
 import unicorn as qemu
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
 
@@ -32,7 +32,7 @@ def mem_invalid_access(
     address: int,
     size: int,
     value: int,
-    user_data
+    user_data: EmulatorContext
 ) -> bool:
     kind = {
         qemu.UC_MEM_READ_UNMAPPED: "READ", 
@@ -67,31 +67,35 @@ def mem_invalid_access(
 def intr_hook(
     uc: qemu.Uc,
     intno: int, 
-    user_data: typing.Any,
+    user_data: EmulatorContext,
 ):
+    ctx = user_data
+
     match intno:
         case 2: # EXCP_SWI
-            pend_svcall_interrupt()
+            pend_svcall_interrupt(ctx.c_fast.m3)
         case 8: # EXCP_EXCEPTION_EXIT
-            exc_return_handler()
+            exc_return_handler(ctx.c_fast.m3)
         case _:
             prints.fatal(
                 f"unhandled intr={intno}, " +
-                f"pc=0x{ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC):x}")
+                f"pc=0x{ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}")
 
     return True
 
 def handle_wfi_instruction(
     uc: qemu.Uc,
-    user_data: typing.Any,
+    user_data: EmulatorContext,
 ):
+    ctx = user_data
+
     # Wait until an interrupt is externally pended from an external source.
-    wait_for_interrupt()
+    wait_for_interrupt(ctx.c_fast.m3)
     
     # Increment past the wfi instruction
-    ucmutex().reg_write(
+    ctx.ucmutex.reg_write(
         qemu.arm_const.UC_ARM_REG_PC, 
-        (ucmutex().reg_read(qemu.arm_const.UC_ARM_REG_PC) + 2) | 1
+        (ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PC) + 2) | 1
     )
     return True
 
@@ -99,9 +103,10 @@ def m3_interrupt_safe_point(
     uc: qemu.Uc,
     address: int,
     size: int,
-    user_data: typing.Any,
+    user_data: EmulatorContext,
 ) -> bool:
-    handle_externally_pended_interrupts()
+    ctx = user_data
+    handle_externally_pended_interrupts(ctx.c_fast.m3)
     return True
 
 def pc_logger(

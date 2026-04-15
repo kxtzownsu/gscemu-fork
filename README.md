@@ -18,12 +18,6 @@ planned soon.
 - haven
 - dauntless(TBC)
 
-## developer notes
-
-if you were to build on this project by using the `src.emulator.haven.Emulator`
-class, you can only have ONE instance of the emulator, or any other chip type
-for that matter.
-
 ### standard for devs
 
 The python code written mostly follows the google style guide, with some

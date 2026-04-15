@@ -4,11 +4,10 @@
 import typing
 import unicorn as qemu
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
-from .regdefs import GLOBALSEC_REGS
 from lib.helpers import (
     unhandled_register_io, 
     unhandled_register_exit,
@@ -28,7 +27,8 @@ _EXPECTED_SB_BL_SIG = [
 ]
 
 class HavenGlobalsec:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext, regs: dict):
+        self.ctx = ctx
         self.mutex = FifoLock()
 
         # HIDE_ROM doesn't do anything as far as we know, so don't do anything.
@@ -43,10 +43,10 @@ class HavenGlobalsec:
         self.obfs_sw_en = False
 
         self.permission_runlevel = {
-            GLOBALSEC_REGS["CPU0_S_PERMISSION"]: PERMISSION_HIGHEST,
-            GLOBALSEC_REGS["CPU0_S_DAP_PERMISSION"]: PERMISSION_HIGHEST,
-            GLOBALSEC_REGS["DDMA0_PERMISSION"]: PERMISSION_HIGHEST,
-            GLOBALSEC_REGS["SOFTWARE_LVL"]: PERMISSION_HIGHEST,
+            regs["CPU0_S_PERMISSION"]: PERMISSION_HIGHEST,
+            regs["CPU0_S_DAP_PERMISSION"]: PERMISSION_HIGHEST,
+            regs["DDMA0_PERMISSION"]: PERMISSION_HIGHEST,
+            regs["SOFTWARE_LVL"]: PERMISSION_HIGHEST,
         }
 
         self.region_ctrl = {
@@ -272,11 +272,11 @@ class HavenGlobalsec:
         
     def read_dummykey(self, size: int, index: int) -> None:
         with self.mutex:
-            return self.dummykey[idx]
+            return self.dummykey[index]
 
     def write_dummykey(self, size: int, value: int, index: int) -> None:
         with self.mutex:
-            self.dummykey[idx] = value
+            self.dummykey[index] = value
 
     def read_dbg_control(self, size: int) -> None:
         with self.mutex:
@@ -381,156 +381,161 @@ class HavenGlobalsec:
             elif reg_type == "size":
                 self.region_size[bus_master][index] = value
 
-c_emu = HavenGlobalsec()
+def init_HavenGlobalsec(ctx: EmulatorContext, regs: dict):
+    c_emu = HavenGlobalsec(ctx, regs)
 
-_REG_FUNC_MAP = {
-    GLOBALSEC_REGS["DBG_CONTROL"]: [
-        c_emu.read_dbg_control, c_emu.write_dbg_control,
-    ],
-    GLOBALSEC_REGS["ALERT"]["CFG_LOCK"]: [
-        c_emu.read_alert_cfg_lock, c_emu.write_alert_cfg_lock
-    ],
-    GLOBALSEC_REGS["ALERT"]["FW_TRIGGER"]: [
-        c_emu.read_alert_fw_trigger, c_emu.write_alert_fw_trigger
-    ],
-    GLOBALSEC_REGS["ALERT"]["CONTROL"]: [
-        c_emu.read_alert_control, c_emu.write_alert_control
-    ],
-    GLOBALSEC_REGS["HIDE_ROM"]: [
-        c_emu.read_hide_rom, c_emu.write_hide_rom
-    ],
-    GLOBALSEC_REGS["SIG_UNLOCK"]: [
-        c_emu.read_sig_unlock, c_emu.write_sig_unlock
-    ],
-    GLOBALSEC_REGS["SB_COMP_STATUS"]: [
-        c_emu.read_sb_comp_status, c_emu.write_sb_comp_status
-    ],
-    GLOBALSEC_REGS["OBFS_SW_EN"]: [
-        c_emu.read_obfs_sw_en, c_emu.write_obfs_sw_en
-    ],
-}
+    reg_fn_map = {
+        regs["DBG_CONTROL"]: [
+            c_emu.read_dbg_control, c_emu.write_dbg_control,
+        ],
+        regs["ALERT"]["CFG_LOCK"]: [
+            c_emu.read_alert_cfg_lock, c_emu.write_alert_cfg_lock
+        ],
+        regs["ALERT"]["FW_TRIGGER"]: [
+            c_emu.read_alert_fw_trigger, c_emu.write_alert_fw_trigger
+        ],
+        regs["ALERT"]["CONTROL"]: [
+            c_emu.read_alert_control, c_emu.write_alert_control
+        ],
+        regs["HIDE_ROM"]: [
+            c_emu.read_hide_rom, c_emu.write_hide_rom
+        ],
+        regs["SIG_UNLOCK"]: [
+            c_emu.read_sig_unlock, c_emu.write_sig_unlock
+        ],
+        regs["SB_COMP_STATUS"]: [
+            c_emu.read_sb_comp_status, c_emu.write_sb_comp_status
+        ],
+        regs["OBFS_SW_EN"]: [
+            c_emu.read_obfs_sw_en, c_emu.write_obfs_sw_en
+        ],
+    }
 
-# GLOBALSEC has many registers that repeat. We should dynamically add the
-# register handlers, not manually add them to the function map. This improves
-# code readability and maintainability. We only sacrifice setup runtime, not
-# emulator runtime.
-for reg_type in ["CTRL", "CTRL_CFG_EN", "BASE_ADDR", "SIZE"]:
-    reg_type_lower = reg_type.lower()
-    for bus_master, offsets in GLOBALSEC_REGS["REGION"][reg_type].items():
-        for idx, offset in enumerate(offsets):
-            _REG_FUNC_MAP[offset] = [
+    # GLOBALSEC has many registers that repeat. We should dynamically add the
+    # register handlers, not manually add them to the function map. This 
+    # improves code readability and maintainability. We only sacrifice setup 
+    # runtime, not emulator runtime. Setup runtime is mostly negligible.
+    for reg_type in ["CTRL", "CTRL_CFG_EN", "BASE_ADDR", "SIZE"]:
+        reg_type_lower = reg_type.lower()
+        for bus_master, offsets in regs["REGION"][reg_type].items():
+            for idx, offset in enumerate(offsets):
+                reg_fn_map[offset] = [
+                    args_lambda_gen(
+                        c_emu.read_region_register,
+                        reg_type_lower,
+                        bus_master,
+                        idx
+                    ),
+                    args_lambda_gen(
+                        c_emu.write_region_register,
+                        reg_type_lower,
+                        bus_master,
+                        idx
+                    )
+                ]
+
+    idx_regs_to_regmap(
+        reg_fn_map, regs["ALERT"]["INTR_STS"],
+        c_emu.read_alert_intr_sts, c_emu.write_alert_intr_sts
+    )
+
+    idx_regs_to_regmap(
+        reg_fn_map, regs["ALERT"]["NMI_EN"],
+        c_emu.read_alert_nmi_en, c_emu.write_alert_nmi_en
+    )
+
+    for idx, dlyctr in enumerate(regs["ALERT"]["DLYCTR"]):
+        reg_fn_map[dlyctr["BASE"]] = [
+            args_lambda_gen(c_emu.read_alert_dlyctr_base, idx),
+            args_lambda_gen(c_emu.write_alert_dlyctr_base, idx)
+        ]
+        reg_fn_map[dlyctr["LEN"]] = [
+            args_lambda_gen(c_emu.read_alert_dlyctr_len, idx),
+            args_lambda_gen(c_emu.write_alert_dlyctr_len, idx)
+        ]
+        for en_idx, en_offset in enumerate(dlyctr["EN"]):
+            reg_fn_map[en_offset] = [
                 args_lambda_gen(
-                    c_emu.read_region_register,
-                    reg_type_lower,
-                    bus_master,
-                    idx
+                    c_emu.read_alert_dlyctr_en, idx, en_idx
                 ),
                 args_lambda_gen(
-                    c_emu.write_region_register,
-                    reg_type_lower,
-                    bus_master,
-                    idx
+                    c_emu.write_alert_dlyctr_en, idx, en_idx
                 )
             ]
-
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, GLOBALSEC_REGS["ALERT"]["INTR_STS"],
-    c_emu.read_alert_intr_sts, c_emu.write_alert_intr_sts
-)
-
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, GLOBALSEC_REGS["ALERT"]["NMI_EN"],
-    c_emu.read_alert_nmi_en, c_emu.write_alert_nmi_en
-)
-
-for idx, dlyctr in enumerate(GLOBALSEC_REGS["ALERT"]["DLYCTR"]):
-    _REG_FUNC_MAP[dlyctr["BASE"]] = [
-        args_lambda_gen(c_emu.read_alert_dlyctr_base, idx),
-        args_lambda_gen(c_emu.write_alert_dlyctr_base, idx)
-    ]
-    _REG_FUNC_MAP[dlyctr["LEN"]] = [
-        args_lambda_gen(c_emu.read_alert_dlyctr_len, idx),
-        args_lambda_gen(c_emu.write_alert_dlyctr_len, idx)
-    ]
-    for en_idx, en_offset in enumerate(dlyctr["EN"]):
-        _REG_FUNC_MAP[en_offset] = [
-            args_lambda_gen(
-                c_emu.read_alert_dlyctr_en, idx, en_idx
-            ),
-            args_lambda_gen(
-                c_emu.write_alert_dlyctr_en, idx, en_idx
-            )
+        reg_fn_map[dlyctr["SHUTDOWN_EN"]] = [
+            args_lambda_gen(c_emu.read_alert_dlyctr_shutdown_en, idx),
+            args_lambda_gen(c_emu.write_alert_dlyctr_shutdown_en, idx)
         ]
-    _REG_FUNC_MAP[dlyctr["SHUTDOWN_EN"]] = [
-        args_lambda_gen(c_emu.read_alert_dlyctr_shutdown_en, idx),
-        args_lambda_gen(c_emu.write_alert_dlyctr_shutdown_en, idx)
-    ]
-    _REG_FUNC_MAP[dlyctr["CLEAR"]] = [
-        args_lambda_gen(c_emu.read_alert_dlyctr_clear, idx),
-        args_lambda_gen(c_emu.write_alert_dlyctr_clear, idx)
-    ]
+        reg_fn_map[dlyctr["CLEAR"]] = [
+            args_lambda_gen(c_emu.read_alert_dlyctr_clear, idx),
+            args_lambda_gen(c_emu.write_alert_dlyctr_clear, idx)
+        ]
 
-for idx, group in enumerate(GLOBALSEC_REGS["ALERT"]["GROUP"]):
-    for en_idx, en_offset in enumerate(group["EN"]):
-        _REG_FUNC_MAP[en_offset] = [
+    for idx, group in enumerate(regs["ALERT"]["GROUP"]):
+        for en_idx, en_offset in enumerate(group["EN"]):
+            reg_fn_map[en_offset] = [
+                args_lambda_gen(
+                    c_emu.read_alert_group_en, idx, en_idx
+                ),
+                args_lambda_gen(
+                    c_emu.read_alert_group_en, idx, en_idx
+                ),
+            ]
+        reg_fn_map[group["CTR"]] = [
+            args_lambda_gen(c_emu.read_alert_group_ctr, idx),
+            args_lambda_gen(c_emu.write_alert_group_ctr, idx)
+        ]
+        reg_fn_map[group["THRESHOLD"]] = [
+            args_lambda_gen(c_emu.read_alert_group_threshold, idx),
+            args_lambda_gen(c_emu.write_alert_group_threshold, idx)
+        ]
+
+    idx_regs_to_regmap(
+        reg_fn_map, regs["DUMMYKEY"],
+        c_emu.read_dummykey, c_emu.write_dummykey
+    )
+
+    idx_regs_to_regmap(
+        reg_fn_map, regs["SB_BL_SIG"],
+        c_emu.read_sb_bl_sig, c_emu.write_sb_bl_sig
+    )
+
+    for perm in [
+        "CPU0_S_PERMISSION", "CPU0_S_DAP_PERMISSION", 
+        "DDMA0_PERMISSION", "SOFTWARE_LVL"
+    ]:
+        reg_fn_map[regs[perm]] = [
             args_lambda_gen(
-                c_emu.read_alert_group_en, idx, en_idx
+                c_emu.read_permission_runlevel, regs[perm]
             ),
             args_lambda_gen(
-                c_emu.read_alert_group_en, idx, en_idx
+                c_emu.write_permission_runlevel, regs[perm]
             ),
         ]
-    _REG_FUNC_MAP[group["CTR"]] = [
-        args_lambda_gen(c_emu.read_alert_group_ctr, idx),
-        args_lambda_gen(c_emu.write_alert_group_ctr, idx)
-    ]
-    _REG_FUNC_MAP[group["THRESHOLD"]] = [
-        args_lambda_gen(c_emu.read_alert_group_threshold, idx),
-        args_lambda_gen(c_emu.write_alert_group_threshold, idx)
-    ]
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, GLOBALSEC_REGS["DUMMYKEY"],
-    c_emu.read_dummykey, c_emu.write_dummykey
-)
+    def component_read_handler(
+        uc_unused: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return reg_fn_map[offset][0](size)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "GLOBALSEC", offset)
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, GLOBALSEC_REGS["SB_BL_SIG"],
-    c_emu.read_sb_bl_sig, c_emu.write_sb_bl_sig
-)
+    def component_write_handler(
+        uc_unused: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            reg_fn_map[offset][1](size, value)
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "GLOBALSEC", offset)
 
-for perm in [
-    "CPU0_S_PERMISSION", "CPU0_S_DAP_PERMISSION", 
-    "DDMA0_PERMISSION", "SOFTWARE_LVL"
-]:
-    _REG_FUNC_MAP[GLOBALSEC_REGS[perm]] = [
-        args_lambda_gen(
-            c_emu.read_permission_runlevel, GLOBALSEC_REGS[perm]
-        ),
-        args_lambda_gen(
-            c_emu.write_permission_runlevel, GLOBALSEC_REGS[perm]
-        ),
-    ]
-
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return _REG_FUNC_MAP[offset][0](size)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "GLOBALSEC", offset)
-
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        _REG_FUNC_MAP[offset][1](size, value)
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "GLOBALSEC", offset)
+    return ComponentObjects(
+        None, component_read_handler, component_write_handler
+    )

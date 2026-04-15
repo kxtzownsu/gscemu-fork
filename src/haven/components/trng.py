@@ -12,10 +12,9 @@ import queue
 import threading
 import secrets
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import TRNG_REGS
 from lib.helpers import (
     unhandled_register_exit, 
     unhandled_register_io
@@ -24,7 +23,9 @@ from lib.helpers import (
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class TRNGEngine:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+        
         self.opthread = None
         self.opqueue = queue.Queue()
 
@@ -181,80 +182,85 @@ class TRNGEngine:
     def write_output_time_counter(self, size: int, value: int):
         self.output_time_counter = value
 
-c_emu = TRNGEngine()
-c_emu.start_worker()
+def init_TRNGEngine(ctx: EmulatorContext, regs: dict):
+    c_emu = TRNGEngine(ctx)
+    c_emu.start_worker()
 
-_REG_FUNC_MAP = {
-    TRNG_REGS["READ_DATA"]: [c_emu.read_read_data, c_emu.write_read_data],
-    TRNG_REGS["SECURE_POST_PROCESSING_CTRL"]: [
-        c_emu.read_secure_post_processing_ctrl, 
-        c_emu.write_secure_post_processing_ctrl
-    ],
-    TRNG_REGS["POST_PROCESSING_CTRL"]: [
-        c_emu.read_post_processing_ctrl, 
-        c_emu.write_post_processing_ctrl
-    ],
-    TRNG_REGS["LDO_CTRL"]: [
-        c_emu.read_ldo_ctrl, 
-        c_emu.write_ldo_ctrl
-    ],
-    TRNG_REGS["ANALOG_CTRL"]: [
-        c_emu.read_analog_ctrl, 
-        c_emu.write_analog_ctrl
-    ],
-    TRNG_REGS["ALLOWED_VALUES"]: [
-        c_emu.read_allowed_values, 
-        c_emu.write_allowed_values
-    ],
-    TRNG_REGS["SLICE_MAX_UPPER_LIMIT"]: [
-        c_emu.read_slice_max_upper_limit, 
-        c_emu.write_slice_max_upper_limit
-    ],
-    TRNG_REGS["SLICE_MIN_LOWER_LIMIT"]: [
-        c_emu.read_slice_min_lower_limit, 
-        c_emu.write_slice_min_lower_limit
-    ],
-    TRNG_REGS["POWER_DOWN_B"]: [
-        c_emu.read_power_down_b, 
-        c_emu.write_power_down_b
-    ],
-    TRNG_REGS["GO_EVENT"]: [c_emu.read_go_event, c_emu.write_go_event],
-    TRNG_REGS["STOP_WORK"]: [c_emu.read_stop_work, c_emu.write_stop_work],
-    TRNG_REGS["EMPTY"]: [c_emu.read_empty, c_emu.write_empty],
-    TRNG_REGS["TIMEOUT_COUNTER"]: [
-        c_emu.read_timeout_counter, 
-        c_emu.write_timeout_counter
-    ],
-    TRNG_REGS["TIMEOUT_MAX_TRY_NUM"]: [
-        c_emu.read_timeout_max_try_num, 
-        c_emu.write_timeout_max_try_num
-    ],
-    TRNG_REGS["FSM_STATE"]: [c_emu.read_fsm_state, c_emu.write_fsm_state],
-    TRNG_REGS["OUTPUT_TIME_COUNTER"]: [
-        c_emu.read_output_time_counter, 
-        c_emu.write_output_time_counter
-    ],
-}
+    reg_fn_map = {
+        regs["READ_DATA"]: [c_emu.read_read_data, c_emu.write_read_data],
+        regs["SECURE_POST_PROCESSING_CTRL"]: [
+            c_emu.read_secure_post_processing_ctrl, 
+            c_emu.write_secure_post_processing_ctrl
+        ],
+        regs["POST_PROCESSING_CTRL"]: [
+            c_emu.read_post_processing_ctrl, 
+            c_emu.write_post_processing_ctrl
+        ],
+        regs["LDO_CTRL"]: [
+            c_emu.read_ldo_ctrl, 
+            c_emu.write_ldo_ctrl
+        ],
+        regs["ANALOG_CTRL"]: [
+            c_emu.read_analog_ctrl, 
+            c_emu.write_analog_ctrl
+        ],
+        regs["ALLOWED_VALUES"]: [
+            c_emu.read_allowed_values, 
+            c_emu.write_allowed_values
+        ],
+        regs["SLICE_MAX_UPPER_LIMIT"]: [
+            c_emu.read_slice_max_upper_limit, 
+            c_emu.write_slice_max_upper_limit
+        ],
+        regs["SLICE_MIN_LOWER_LIMIT"]: [
+            c_emu.read_slice_min_lower_limit, 
+            c_emu.write_slice_min_lower_limit
+        ],
+        regs["POWER_DOWN_B"]: [
+            c_emu.read_power_down_b, 
+            c_emu.write_power_down_b
+        ],
+        regs["GO_EVENT"]: [c_emu.read_go_event, c_emu.write_go_event],
+        regs["STOP_WORK"]: [c_emu.read_stop_work, c_emu.write_stop_work],
+        regs["EMPTY"]: [c_emu.read_empty, c_emu.write_empty],
+        regs["TIMEOUT_COUNTER"]: [
+            c_emu.read_timeout_counter, 
+            c_emu.write_timeout_counter
+        ],
+        regs["TIMEOUT_MAX_TRY_NUM"]: [
+            c_emu.read_timeout_max_try_num, 
+            c_emu.write_timeout_max_try_num
+        ],
+        regs["FSM_STATE"]: [c_emu.read_fsm_state, c_emu.write_fsm_state],
+        regs["OUTPUT_TIME_COUNTER"]: [
+            c_emu.read_output_time_counter, 
+            c_emu.write_output_time_counter
+        ],
+    }
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "TRNG0", offset)
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "TRNG0", offset)
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "TRNG0", offset)
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "TRNG0", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )

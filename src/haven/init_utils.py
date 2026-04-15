@@ -14,16 +14,19 @@ import hashlib
 import struct
 import hmac
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext
 from env import *
 from lib.logger import GscemuLogger
 from .components.regdefs import REG_DEFS
-from .mmio_map import MMIO_HANDLERS
 from .endorsement_cert import *
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-def map_memory(qemu_mem_map_list: dict, mmio_mem_map_list: dict) -> bool:
+def map_memory(
+    ctx: EmulatorContext, 
+    qemu_mem_map_list: dict, 
+    mmio_mem_map_list: dict
+) -> bool:
     """Helper function to map memory in the emulator.
     
     This is required or we will encounter issues within the emulator where the
@@ -38,7 +41,7 @@ def map_memory(qemu_mem_map_list: dict, mmio_mem_map_list: dict) -> bool:
             prints.debug(f"Mapping {i[0]} with " +
                         f"addr=0x{i[1]['base_addr']:x}" +
                         f",size=0x{i[1]['size']:x}")
-            g_uc().mem_map(
+            ctx.uc.mem_map(
                 i[1]["base_addr"], 
                 i[1]["size"]
             )
@@ -55,12 +58,12 @@ def map_memory(qemu_mem_map_list: dict, mmio_mem_map_list: dict) -> bool:
             prints.debug(f"Mapping {i[0]} with " +
                         f"addr=0x{i[1]['base_addr']:x}" +
                         f",size=0x{i[1]['size']:x}")
-            g_uc().mmio_map(
+            ctx.uc.mmio_map(
                 i[1]["base_addr"], 
                 i[1]["size"],
-                MMIO_HANDLERS[i[0]][0],
+                ctx.components[i[0]].read_fn,
                 None,
-                MMIO_HANDLERS[i[0]][1],
+                ctx.components[i[0]].write_fn,
                 None,        
             )
     except Exception as e:
@@ -72,19 +75,20 @@ def map_memory(qemu_mem_map_list: dict, mmio_mem_map_list: dict) -> bool:
     
     return True
 
-def prepare_flash_space() -> None:
+def prepare_flash_space(ctx: EmulatorContext) -> None:
     """We need to fill the entire flash space with 0xFF every initialization."""
-    g_uc().mem_write(
+    ctx.uc.mem_write(
         REG_DEFS["FLASH_PROG"]["base_addr"], 
         (b'\xff' * REG_DEFS["FLASH_PROG"]["size"])
     )
     
-    g_uc().mem_write(
+    ctx.uc.mem_write(
         REG_DEFS["INFO1"]["base_addr"], 
         (b'\xff' * REG_DEFS["INFO1"]["size"])
     )
 
 def load_firmware(
+    ctx: EmulatorContext,
     mem_map_list: dict, 
     fw_paths: dict,
     strict_file_size_checks: bool | None = True,
@@ -152,18 +156,18 @@ def load_firmware(
             return False
 
     # Load BootROM into FLASH_BROM
-    g_uc().mem_write(mem_map_list["FLASH_BROM"]["base_addr"], 
+    ctx.uc.mem_write(mem_map_list["FLASH_BROM"]["base_addr"], 
                      rom_data[:(mem_map_list["FLASH_BROM"]["size"] - 0x20)])
 
     # Load firmware into FLASH_PROG
-    g_uc().mem_write(mem_map_list["FLASH_PROG"]["base_addr"], 
+    ctx.uc.mem_write(mem_map_list["FLASH_PROG"]["base_addr"], 
                      fw_data[:mem_map_list["FLASH_PROG"]["size"]])
     
     return True
 
-def install_tpm_endorsement_certs():
+def install_tpm_endorsement_certs(ctx: EmulatorContext):
     # Write the EPS into INFO1
-    g_uc().mem_write(0x28000 + 0x600, FIXED_ENDORSEMENT_SEED)
+    ctx.uc.mem_write(0x28000 + 0x600, FIXED_ENDORSEMENT_SEED)
 
     # Build the cert region in RO_A
 
@@ -201,4 +205,4 @@ def install_tpm_endorsement_certs():
     hmac_value = hmac.new(key1, bytes(cert_region), hashlib.sha256).digest()
     cert_region.extend(hmac_value)
 
-    g_uc().mem_write(0x43800, bytes(cert_region))
+    ctx.uc.mem_write(0x43800, bytes(cert_region))

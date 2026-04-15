@@ -6,10 +6,9 @@ import unicorn as qemu
 import queue
 import threading
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import PMU_REGS
 from lib.helpers import (
     unhandled_register_exit, 
     unhandled_register_io,
@@ -19,7 +18,9 @@ from lib.helpers import (
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class PowerManagementUnit:
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+
         self.opthread = None
         self.opqueue = queue.Queue()
 
@@ -256,77 +257,82 @@ class PowerManagementUnit:
             else:
                 self.long_life_scratch_wr_en[bit] = False
 
-c_emu = PowerManagementUnit()
-c_emu.start_worker()
+def init_PowerManagementUnit(ctx: EmulatorContext, regs: dict):
+    c_emu = PowerManagementUnit(ctx)
+    c_emu.start_worker()
 
-_REG_FUNC_MAP = {
-    PMU_REGS["CHIP_ID"]: [c_emu.read_chip_id, c_emu.write_chip_id],
-    PMU_REGS["SW_PDB"]: [c_emu.read_sw_pdb, c_emu.write_sw_pdb],
-    PMU_REGS["INT_ENABLE"]: [c_emu.read_int_enable, c_emu.write_int_enable],
+    reg_fn_map = {
+        regs["CHIP_ID"]: [c_emu.read_chip_id, c_emu.write_chip_id],
+        regs["SW_PDB"]: [c_emu.read_sw_pdb, c_emu.write_sw_pdb],
+        regs["INT_ENABLE"]: [c_emu.read_int_enable, c_emu.write_int_enable],
 
-    PMU_REGS["EXITPD_MASK"]: [c_emu.read_exitpd_mask, c_emu.write_exitpd_mask],
-    PMU_REGS["LOW_POWER_DIS"]: [
-        c_emu.read_low_power_dis, c_emu.write_low_power_dis
-    ],
+        regs["EXITPD_MASK"]: [c_emu.read_exitpd_mask, c_emu.write_exitpd_mask],
+        regs["LOW_POWER_DIS"]: [
+            c_emu.read_low_power_dis, c_emu.write_low_power_dis
+        ],
 
-    PMU_REGS["PERICLKSET0"]: [c_emu.read_periclkset0, c_emu.write_periclkset0],
-    PMU_REGS["PERICLKCLR0"]: [c_emu.read_periclkclr0, c_emu.write_periclkclr0],
-    PMU_REGS["PERICLKSET1"]: [c_emu.read_periclkset1, c_emu.write_periclkset1],
-    PMU_REGS["PERICLKCLR1"]: [c_emu.read_periclkclr1, c_emu.write_periclkclr1],
+        regs["PERICLKSET0"]: [c_emu.read_periclkset0, c_emu.write_periclkset0],
+        regs["PERICLKCLR0"]: [c_emu.read_periclkclr0, c_emu.write_periclkclr0],
+        regs["PERICLKSET1"]: [c_emu.read_periclkset1, c_emu.write_periclkset1],
+        regs["PERICLKCLR1"]: [c_emu.read_periclkclr1, c_emu.write_periclkclr1],
 
-    PMU_REGS["CLRRST"]: [c_emu.read_clrrst, c_emu.write_clrrst],
-    PMU_REGS["RSTSRC"]: [c_emu.read_rstsrc, c_emu.write_rstsrc],
+        regs["CLRRST"]: [c_emu.read_clrrst, c_emu.write_clrrst],
+        regs["RSTSRC"]: [c_emu.read_rstsrc, c_emu.write_rstsrc],
 
-    PMU_REGS["LONG_LIFE_SCRATCH_WR_EN"]: [
-        c_emu.read_long_life_scratch_wr_en, c_emu.write_long_life_scratch_wr_en
-    ],
-}
+        regs["LONG_LIFE_SCRATCH_WR_EN"]: [
+            c_emu.read_long_life_scratch_wr_en, c_emu.write_long_life_scratch_wr_en
+        ],
+    }
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, PMU_REGS["LONG_LIFE_SCRATCH"],
-    c_emu.read_long_life_scratch, c_emu.write_long_life_scratch
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["LONG_LIFE_SCRATCH"],
+        c_emu.read_long_life_scratch, c_emu.write_long_life_scratch
+    )
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, PMU_REGS["PWRDN_SCRATCH"],
-    c_emu.read_pwrdn_scratch, c_emu.write_pwrdn_scratch
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["PWRDN_SCRATCH"],
+        c_emu.read_pwrdn_scratch, c_emu.write_pwrdn_scratch
+    )
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, PMU_REGS["PWRDN_SCRATCH_LOCK"],
-    c_emu.read_pwrdn_scratch_lock, c_emu.write_pwrdn_scratch_lock
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["PWRDN_SCRATCH_LOCK"],
+        c_emu.read_pwrdn_scratch_lock, c_emu.write_pwrdn_scratch_lock
+    )
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, PMU_REGS["RST_WR_EN"],
-    c_emu.read_rst_wr_en, c_emu.write_rst_wr_en
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["RST_WR_EN"],
+        c_emu.read_rst_wr_en, c_emu.write_rst_wr_en
+    )
 
-idx_regs_to_regmap(
-    _REG_FUNC_MAP, PMU_REGS["RST"],
-    c_emu.read_rst, c_emu.write_rst
-)
+    idx_regs_to_regmap(
+        reg_fn_map, regs["RST"],
+        c_emu.read_rst, c_emu.write_rst
+    )
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "PMU", offset)
-        return 0
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "PMU", offset)
+            return 0
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "PMU", offset)
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "PMU", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )

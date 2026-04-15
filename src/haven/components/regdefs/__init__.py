@@ -3,3 +3,4 @@
 
 from .registers import *
 from .fuse_registers import *
+from .pinmux_registers import *

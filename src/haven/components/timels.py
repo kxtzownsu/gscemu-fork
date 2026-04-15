@@ -13,10 +13,9 @@ import unicorn as qemu
 import queue
 import threading
 
-from lib.globalvars import *
+from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from .regdefs import TIMELS_REGS
 from lib.helpers import unhandled_register_exit, args_lambda_gen
 from .m3 import pend_external_irq, unpend_external_irq
 
@@ -63,7 +62,9 @@ class LowSpeedTimer:
     when they expire.
     """
 
-    def __init__(self):
+    def __init__(self, ctx: EmulatorContext):
+        self.ctx = ctx
+
         self.opthread = None
         self.opqueue = queue.Queue()
 
@@ -127,7 +128,7 @@ class LowSpeedTimer:
                             timer.running = False
 
                         if timer.ier:
-                            pend_external_irq(timer.irq)
+                            pend_external_irq(self.ctx.c_fast.m3, timer.irq)
 
     def start_worker(self):
         if not self.opthread:
@@ -280,7 +281,7 @@ class LowSpeedTimer:
                 timer.status &= ~1
                 timer.isr &= ~1
                 timer.ipr &= ~1
-                unpend_external_irq(self.timers[index].irq)
+                unpend_external_irq(self.ctx.c_fast.m3, self.timers[index].irq)
 
     def read_timer_wakeup_ack(
         self, size: int, queue: queue.Queue, index: int
@@ -294,83 +295,115 @@ class LowSpeedTimer:
         with self.timer_lock:
             self.timers[index].wakeup_ack = value
 
-c_emu = LowSpeedTimer()
-c_emu.start_worker()
+    # For intensive tasks like running the CRYPTO accelerator, it may be really
+    # slow. As a workaround, pause the timer while it is running. Eventually
+    # when the CRYPTO accelerator becomes faster, this can be deprecated.
+    def component_stop_timer_debug(self) -> None:
+        with self.timer_lock:
+            for timer in self.timers:
+                if timer.running:
+                    current_value = self._compute_value_internal(timer)
+                    timer.start_value = current_value
+                    timer.running = False
+                    timer._debug_paused = True
+                else:
+                    timer._debug_paused = False
 
-# Within a TIMELS component, there are 2 timers that do the same thing.
-# TIMER0 and TIMER1.
-_SUB_TIMER_FUNC_MAP = {
-    TIMELS_REGS["TIMER"]["CONTROL"]: [
-        c_emu.read_timer_control, c_emu.write_timer_control
-    ],
-    TIMELS_REGS["TIMER"]["STATUS"]: [
-        c_emu.read_timer_status, c_emu.write_timer_status
-    ],
-    TIMELS_REGS["TIMER"]["LOAD"]: [
-        c_emu.read_timer_load, c_emu.write_timer_load
-    ],
-    TIMELS_REGS["TIMER"]["RELOADVAL"]: [
-        c_emu.read_timer_reloadval, c_emu.write_timer_reloadval
-    ],
-    TIMELS_REGS["TIMER"]["VALUE"]: [
-        c_emu.read_timer_value, c_emu.write_timer_value
-    ],
-    TIMELS_REGS["TIMER"]["STEP"]: [
-        c_emu.read_timer_step, c_emu.write_timer_step
-    ],
-    TIMELS_REGS["TIMER"]["IER"]: [
-        c_emu.read_timer_ier, c_emu.write_timer_ier
-    ],
-    TIMELS_REGS["TIMER"]["ISR"]: [
-        c_emu.read_timer_isr, c_emu.write_timer_isr
-    ],
-    TIMELS_REGS["TIMER"]["IPR"]: [
-        c_emu.read_timer_ipr, c_emu.write_timer_ipr
-    ],
-    TIMELS_REGS["TIMER"]["IAR"]: [
-        c_emu.read_timer_iar, c_emu.write_timer_iar
-    ],
-    TIMELS_REGS["TIMER"]["WAKEUP_ACK"]: [
-        c_emu.read_timer_wakeup_ack, c_emu.write_timer_wakeup_ack
-    ],  
-}
+        self.watchdog_check.set()
 
-_REG_FUNC_MAP = {}
+    def component_start_timer_debug(self) -> None:
+        with self.timer_lock:
+            for timer in self.timers:
+                if getattr(timer, '_debug_paused', False):
+                    if timer.start_value == 0 and timer.load:
+                        timer.start_value = timer.load
+                    timer.start_time_ns = time.monotonic_ns()
+                    timer.running = True
+                    timer._debug_paused = False
 
-for timer_idx in range(2):
-    for offset, fn_map in _SUB_TIMER_FUNC_MAP.items():
-        _REG_FUNC_MAP[TIMELS_REGS[
-            f"TIMER{timer_idx}_BASE"
-        ] + offset] = [
-            args_lambda_gen(fn_map[0], timer_idx),
-            args_lambda_gen(fn_map[1], timer_idx)
-        ]
+        self.watchdog_check.set()
 
-def component_read_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    user_data: typing.Any,
-) -> int:
-    try:
-        return c_emu.queue_read_worker_op(size, _REG_FUNC_MAP[offset][0])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "TIMELS0", offset)
+def init_LowSpeedTimer(ctx: EmulatorContext, regs: dict):
+    c_emu = LowSpeedTimer(ctx)
+    c_emu.start_worker()
 
-def component_write_handler(
-    uc: qemu.Uc,
-    offset: int,
-    size: int,
-    value: int,
-    user_data: typing.Any,
-) -> None:
-    try:
-        c_emu.queue_write_worker_op(size, value, _REG_FUNC_MAP[offset][1])
-    except KeyError:
-        unhandled_register_exit(g_uc(), ucthread(), prints, "TIMELS0", offset)
+    # Within a TIMELS component, there are 2 timers that do the same thing.
+    # TIMER0 and TIMER1.
+    sub_timer_fn_map = {
+        regs["TIMER"]["CONTROL"]: [
+            c_emu.read_timer_control, c_emu.write_timer_control
+        ],
+        regs["TIMER"]["STATUS"]: [
+            c_emu.read_timer_status, c_emu.write_timer_status
+        ],
+        regs["TIMER"]["LOAD"]: [
+            c_emu.read_timer_load, c_emu.write_timer_load
+        ],
+        regs["TIMER"]["RELOADVAL"]: [
+            c_emu.read_timer_reloadval, c_emu.write_timer_reloadval
+        ],
+        regs["TIMER"]["VALUE"]: [
+            c_emu.read_timer_value, c_emu.write_timer_value
+        ],
+        regs["TIMER"]["STEP"]: [
+            c_emu.read_timer_step, c_emu.write_timer_step
+        ],
+        regs["TIMER"]["IER"]: [
+            c_emu.read_timer_ier, c_emu.write_timer_ier
+        ],
+        regs["TIMER"]["ISR"]: [
+            c_emu.read_timer_isr, c_emu.write_timer_isr
+        ],
+        regs["TIMER"]["IPR"]: [
+            c_emu.read_timer_ipr, c_emu.write_timer_ipr
+        ],
+        regs["TIMER"]["IAR"]: [
+            c_emu.read_timer_iar, c_emu.write_timer_iar
+        ],
+        regs["TIMER"]["WAKEUP_ACK"]: [
+            c_emu.read_timer_wakeup_ack, c_emu.write_timer_wakeup_ack
+        ],  
+    }
 
+    reg_fn_map = {}
 
-def component_stop_timer_debug() -> None:
+    for timer_idx in range(2):
+        for offset, fn_map in sub_timer_fn_map.items():
+            reg_fn_map[regs[
+                f"TIMER{timer_idx}_BASE"
+            ] + offset] = [
+                args_lambda_gen(fn_map[0], timer_idx),
+                args_lambda_gen(fn_map[1], timer_idx)
+            ]
+
+    def component_read_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        user_data: typing.Any,
+    ) -> int:
+        try:
+            return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "TIMELS0", offset)
+
+    def component_write_handler(
+        uc: qemu.Uc,
+        offset: int,
+        size: int,
+        value: int,
+        user_data: typing.Any,
+    ) -> None:
+        try:
+            c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
+        except KeyError:
+            unhandled_register_exit(ctx, prints, "TIMELS0", offset)
+
+    return ComponentObjects(
+        c_emu, component_read_handler, component_write_handler
+    )
+
+def component_stop_timer_debug(c_emu: LowSpeedTimer) -> None:
     with c_emu.timer_lock:
         for timer in c_emu.timers:
             if timer.running:
@@ -384,7 +417,7 @@ def component_stop_timer_debug() -> None:
     c_emu.watchdog_check.set()
 
 
-def component_start_timer_debug() -> None:
+def component_start_timer_debug(c_emu: LowSpeedTimer) -> None:
     with c_emu.timer_lock:
         for timer in c_emu.timers:
             if getattr(timer, '_debug_paused', False):
