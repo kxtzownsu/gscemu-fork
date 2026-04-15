@@ -24,6 +24,11 @@ class UartController:
 
         self.input_queue = queue.Queue()
 
+        # Have a blank function incase that the callback was never actually
+        # initialized.
+        self.char_out_callback = lambda char: None
+        self.char_out_callback_userdata = None
+
         # TX cannot be ready until CTRL is set. CTRL is 0 by default.
         self.state = 1 # BIT(0)
 
@@ -71,9 +76,16 @@ class UartController:
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
+    def set_char_out_callback(self, fn, user_data) -> None:
+        self.char_out_callback = fn
+        self.char_out_callback_userdata = user_data
+
     def queued_uart_input(self, input: int) -> None:
         self.input_queue.put(input, block=False)
         self.opqueue.put([None, tuple()])
+
+    def queued_uart_out_callback(self, fn, user_data) -> None:
+        self.opqueue.put([self.set_char_out_callback, (fn, user_data)])
 
     def ctrl_process(self):
         # UART_CTRL_TX
@@ -112,11 +124,7 @@ class UartController:
 
     def write_wdata(self, size: int, value: int) -> None:
         if not (self.state & 1): # BIT(0)
-            try:
-                sys.stdout.write(chr(value))
-                sys.stdout.flush()
-            except:
-                pass
+            self.char_out_callback(value, self.char_out_callback_userdata)
         else:
             prints.warning("WDATA written to whilst STATE_TX set!")
 
@@ -225,3 +233,6 @@ def init_UartController(ctx: EmulatorContext, regs: dict):
 
 def cr50_uart_input(c_emu: UartController, unicode_char_code: int) -> None:
     c_emu.queued_uart_input(unicode_char_code)
+
+def cr50_uart_output_callback(c_emu: UartController, fn, user_data) -> None:
+    c_emu.queued_uart_out_callback(fn, user_data)

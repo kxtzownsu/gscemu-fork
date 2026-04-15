@@ -33,7 +33,7 @@ from .components.regdefs import REG_DEFS, MMIO_REG_DEFS
 from lib.logger import GscemuLogger
 from .components import initialize_components
 
-from .components.uart import cr50_uart_input
+from .components.uart import cr50_uart_input, cr50_uart_output_callback
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -104,18 +104,21 @@ class Emulator:
         init_custom_board_pinmux_features(self.ctx.components["PINMUX"].object)
         
         self.ctx.uc.hook_add(
-            qemu.UC_HOOK_INTR, hooks.intr_hook, user_data=self.ctx
+            htype = qemu.UC_HOOK_INTR, 
+            callback = hooks.intr_hook, 
+            user_data = self.ctx
         )
         
         # We need to also capture invalid memory accesses to trigger
         # exceptions.
         self.ctx.uc.hook_add(
-            (
+            htype = (
                 qemu.UC_HOOK_MEM_READ_UNMAPPED |
                 qemu.UC_HOOK_MEM_WRITE_UNMAPPED |
                 qemu.UC_HOOK_MEM_FETCH_UNMAPPED
             ), 
-            hooks.mem_invalid_access, user_data=self.ctx
+            callback = hooks.mem_invalid_access, 
+            user_data = self.ctx,
         )
 
         # On an external interrupt, we shouldn't just branch to the interrupt
@@ -132,15 +135,20 @@ class Emulator:
         # Albeit slow, this is the only way to fix the issue at this current
         # point in time.
         self.ctx.uc.hook_add(
-            qemu.UC_HOOK_BLOCK, 
-            hooks.m3_interrupt_safe_point, user_data=self.ctx
+            htype = qemu.UC_HOOK_BLOCK, 
+            callback = hooks.m3_interrupt_safe_point, 
+            user_data = self.ctx
         )
 
         # We need to manually handle the wfi instruction as our interrupt
         # handler is here.
         self.ctx.uc.hook_add(
-            qemu.UC_HOOK_INSN, hooks.handle_wfi_instruction, self.ctx, 
-            1, 0, qemu.arm_const.UC_ARM_INS_WFI
+            htype = qemu.UC_HOOK_INSN, 
+            callback = hooks.handle_wfi_instruction, 
+            user_data = self.ctx, 
+            begin = 1, 
+            end = 0, 
+            aux1 = qemu.arm_const.UC_ARM_INS_WFI
         )
 
         if GSCEMULATOR_PC_LOGGING_SETTINGS["log_pc"]:
@@ -148,7 +156,9 @@ class Emulator:
                 GSCEMULATOR_PC_LOGGING_SETTINGS["log_file_path"], "w"
             )
             self.ctx.uc.hook_add(
-                qemu.UC_HOOK_CODE, hooks.pc_logger, self.pc_logger
+                htype = qemu.UC_HOOK_CODE, 
+                callback = hooks.pc_logger, 
+                user_data = self.pc_logger
             )
         
         # Call this after the emulator has finished initializing.
@@ -157,6 +167,9 @@ class Emulator:
 
     def uart_input(self, input: int) -> None:
         cr50_uart_input(self.ctx.c_fast.uart0, input)
+
+    def set_uart_output_fn(self, fn, user_data) -> None:
+        cr50_uart_output_callback(self.ctx.c_fast.uart0, fn, user_data)
 
     def start_emulation(self) -> None:
         """Run the emulator."""

@@ -12,28 +12,46 @@ This main.py file was built for the haven Emulator object, but we will add more
 support in the future.
 """
 
-import termios
-import sys
-import signal
+import os
 import threading
 import tty
+import pty
 
 from lib.logger import GscemuLogger
 from env import *
 from src.haven import Emulator as havnEmulator
 
-old_terminal_settings = termios.tcgetattr(sys.stdin)
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-def char_handler_worker(recieve_fn):
+def emu_char_write_pts_callback(char: int, master_fd):
+    os.write(master_fd, bytes([char]))
+
+def user_char_write_emu_thread(call_fn, master_fd):
     while True:
-        char = sys.stdin.read(1)
-        if char == '\x03': # Ctrl+C
-            signal.raise_signal(signal.SIGINT)
-        elif char == '\x13': # Ctrl+S
-            signal.raise_signal(signal.SIGUSR1)
-        else:
-            recieve_fn(ord(char))
+        try:
+            call_fn(ord(os.read(master_fd, 1)))
+        except Exception as e:
+            print(e)
+
+def setup_pts_device(chipemu: havnEmulator):
+    master_fd, slave_fd = pty.openpty()
+    tty.setraw(slave_fd)
+
+    slave_name = os.ttyname(slave_fd)
+
+    write_thread = threading.Thread(
+        target=user_char_write_emu_thread, 
+        daemon=True,
+        args=(chipemu.uart_input, master_fd)
+    )
+    write_thread.start()
+
+    chipemu.set_uart_output_fn(
+        emu_char_write_pts_callback,
+        master_fd
+    )
+
+    print(f"Emulator UART0 at {slave_name}")
 
 # TODO(appleflyer): implement arg system
 def main():
@@ -42,16 +60,7 @@ def main():
         GSCEMULATOR_FW_STRICT_SIZE_CHECKING
     )
 
-    # for macOS to ensure ctrl+s is detected.
-    new_settings = termios.tcgetattr(sys.stdin)
-    new_settings[0] &= ~termios.IXON
-    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, new_settings)
-
-    tty.setcbreak(sys.stdin.fileno())
-    char_recieve_thread = threading.Thread(
-        target=char_handler_worker, daemon=True, args=(chipemu.uart_input,)
-    )
-    char_recieve_thread.start()
+    setup_pts_device(chipemu)
 
     chipemu.start_emulation()
 
