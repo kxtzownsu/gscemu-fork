@@ -48,7 +48,7 @@ def mem_invalid_access(
     if access == qemu.UC_MEM_WRITE_UNMAPPED:
         prints.warning(f"value written = 0x{value:x}")
         
-    unsafe_pend_sysintr(5) # BusFault
+    unsafe_pend_sysintr(user_data.c_fast.m3, 5) # BusFault
 
     # When we return from a UC_MEM_x_UNMAPPED hook, we need to map the memory.
     # Unicorn will try to re-access the memory and crash the emulator.

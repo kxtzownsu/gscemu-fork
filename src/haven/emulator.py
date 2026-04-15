@@ -25,13 +25,13 @@ import traceback
 import unicorn as qemu
 
 from lib.emulator_context import EmulatorContext
-from .c_fastlookup import ComponentFastLookup
+from .components import ComponentFastLookup
 from .init_utils import *
 from .pinmux_config import *
 from . import hooks
 from .components.regdefs import REG_DEFS, MMIO_REG_DEFS
 from lib.logger import GscemuLogger
-from .mmio_map import initialize_components
+from .components import initialize_components
 
 from .components.uart import cr50_uart_input
 
@@ -100,8 +100,8 @@ class Emulator:
         
         install_tpm_endorsement_certs(self.ctx)
 
-        init_strap_config(self.ctx)
-        init_custom_board_pinmux_features(self.ctx)
+        init_strap_config(self.ctx.components["PINMUX"].object)
+        init_custom_board_pinmux_features(self.ctx.components["PINMUX"].object)
         
         self.ctx.uc.hook_add(
             qemu.UC_HOOK_INTR, hooks.intr_hook, user_data=self.ctx
