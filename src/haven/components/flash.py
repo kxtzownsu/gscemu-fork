@@ -173,7 +173,7 @@ class FlashController:
         self.start_addr = self.start_addr + (self.trans_offset * 4)
         
         # All checks passed, start OP_ERASE.
-        self.ctx.ucmutex.int32_mem_write(self.start_addr, b'\xff' * 0x800)
+        self.ctx.ucmutex.mem_write(self.start_addr, b'\xff' * 0x800)
 
     def op_write_block(self):
         # Check if our TRANS_OFFSET is within bounds.

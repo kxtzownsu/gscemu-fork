@@ -62,6 +62,9 @@ def main():
 
     setup_pts_device(chipemu)
 
+    input("Emulator setup complete! Press Enter to start emulaton...")
+    print("Emulation started!")
+
     chipemu.start_emulation()
 
 # We need this now that we're making gscemu a pip installable CLI tool, so that
