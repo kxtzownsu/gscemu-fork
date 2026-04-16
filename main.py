@@ -16,6 +16,8 @@ import os
 import threading
 import tty
 import pty
+import fcntl
+import select
 
 from lib.logger import GscemuLogger
 from env import *
@@ -24,20 +26,31 @@ from src.haven import Emulator as havnEmulator
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 def emu_char_write_pts_callback(char: int, master_fd):
-    os.write(master_fd, bytes([char]))
+    try:    
+        os.write(master_fd, bytes([char]))
+    except Exception as e:
+        print(f"pty emu -> user error: {e}")
 
 def user_char_write_emu_thread(call_fn, master_fd):
     while True:
         try:
+            # Wait until we recieve data, since O_NONBLOCK is enabled now.
+            select.select([master_fd], [], [])
+
             call_fn(ord(os.read(master_fd, 1)))
         except Exception as e:
-            print(e)
+            prints.error(f"pty user -> emu error: {e}")
+            break
 
 def setup_pts_device(chipemu: havnEmulator):
     master_fd, slave_fd = pty.openpty()
+    tty.setraw(master_fd)
     tty.setraw(slave_fd)
 
     slave_name = os.ttyname(slave_fd)
+
+    flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+    fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
     write_thread = threading.Thread(
         target=user_char_write_emu_thread, 
