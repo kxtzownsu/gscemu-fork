@@ -145,3 +145,23 @@ def halt_emulation(
         f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
     )
     ucthread.emu_halt()
+
+def extract_max_number(v, current_max=None):
+    """
+    Extract max numerical value from a int/float/list/dict object.
+    This is useful for creating the most memory efficient lists for register
+    mappings.
+    """
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if current_max is None or v > current_max:
+            current_max = v
+
+    elif isinstance(v, list):
+        for item in v:
+            current_max = extract_max_number(item, current_max)
+
+    elif isinstance(v, dict):
+        for item in v.values():
+            current_max = extract_max_number(item, current_max)
+
+    return current_max

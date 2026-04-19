@@ -166,10 +166,6 @@ MMIO_REG_DEFS = {
 
 UART_REGS = {
     "NCO": 0x8,
-    "NCO_WIDTH": 16,
-    "OVERSAMPLE_RATE": 16,
-    "ADDR_BASE_SEP": 0x10000,
-    "PCLK_FREQ": 24 * 1000 * 1000,
     "FIFO": 0x24,
     "CTRL": 0xc,
     "STATE": 0x14,

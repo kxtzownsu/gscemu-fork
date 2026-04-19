@@ -10,7 +10,9 @@ import sys
 from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from lib.helpers import unhandled_register_exit, unhandled_register_io
+from lib.helpers import (
+    unhandled_register_exit, unhandled_register_io, extract_max_number
+)
 from .m3 import pend_external_irq, unpend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
@@ -193,16 +195,19 @@ def init_UartController(ctx: EmulatorContext, regs: dict):
     c_emu = UartController(ctx)
     c_emu.start_worker()
 
-    reg_fn_map = {
-        regs["WDATA"]: [c_emu.read_wdata, c_emu.write_wdata],
-        regs["NCO"]: [c_emu.read_nco, c_emu.write_nco],
-        regs["CTRL"]: [c_emu.read_ctrl, c_emu.write_ctrl],
-        regs["STATE"]: [c_emu.read_state, c_emu.write_state],
-        regs["RDATA"]: [c_emu.read_rdata, c_emu.write_rdata],
-        regs["FIFO"]: [c_emu.read_fifo, c_emu.write_fifo],
-        regs["ICTRL"]: [c_emu.read_ictrl, c_emu.write_ictrl],
-        regs["ISTATECLR"]: [c_emu.read_istateclr, c_emu.write_istateclr],
-    }
+    reg_fn_map = [0] * (max(regs.values()) + 4)
+    print(extract_max_number(regs))
+
+    reg_fn_map[regs["WDATA"]] = [c_emu.read_wdata, c_emu.write_wdata]
+    reg_fn_map[regs["NCO"]] = [c_emu.read_nco, c_emu.write_nco]
+    reg_fn_map[regs["CTRL"]] = [c_emu.read_ctrl, c_emu.write_ctrl]
+    reg_fn_map[regs["STATE"]] = [c_emu.read_state, c_emu.write_state]
+    reg_fn_map[regs["RDATA"]] = [c_emu.read_rdata, c_emu.write_rdata]
+    reg_fn_map[regs["FIFO"]] = [c_emu.read_fifo, c_emu.write_fifo]
+    reg_fn_map[regs["ICTRL"]] = [c_emu.read_ictrl, c_emu.write_ictrl]
+    reg_fn_map[regs["ISTATECLR"]] = [
+        c_emu.read_istateclr, c_emu.write_istateclr
+    ]
 
     def component_read_handler(
         uc: qemu.Uc,

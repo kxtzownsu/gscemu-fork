@@ -64,7 +64,7 @@ def setup_pts_device(chipemu: havnEmulator):
         master_fd
     )
 
-    print(f"Emulator UART0 at {slave_name}")
+    print(f"Emulator UART0: {slave_name}")
 
 # TODO(appleflyer): implement arg system
 def main():
