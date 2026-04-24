@@ -195,8 +195,7 @@ def init_UartController(ctx: EmulatorContext, regs: dict):
     c_emu = UartController(ctx)
     c_emu.start_worker()
 
-    reg_fn_map = [0] * (max(regs.values()) + 4)
-    print(extract_max_number(regs))
+    reg_fn_map = [0] * (extract_max_number(regs) + 4)
 
     reg_fn_map[regs["WDATA"]] = [c_emu.read_wdata, c_emu.write_wdata]
     reg_fn_map[regs["NCO"]] = [c_emu.read_nco, c_emu.write_nco]

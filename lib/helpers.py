@@ -149,8 +149,8 @@ def halt_emulation(
 def extract_max_number(v, current_max=None):
     """
     Extract max numerical value from a int/float/list/dict object.
-    This is useful for creating the most memory efficient lists for register
-    mappings.
+    This is useful for creating the most memory efficient lists for list based
+    register mapping.
     """
     if isinstance(v, (int, float)) and not isinstance(v, bool):
         if current_max is None or v > current_max:
