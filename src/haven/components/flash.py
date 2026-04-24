@@ -321,10 +321,7 @@ class FlashController:
         queue.put(self.protect_info1_erase)
 
     def write_protect_info1_erase(self, size: int, value: int) -> None:
-        # TODO(appleflyer): Should we allow PROTECT_INFO1_ERASE disabling? Test
-        # with RMASmoke
-        if not self.protect_info1_erase:
-            self.protect_info1_erase = value
+        self.protect_info1_erase = value & 1
 
     def read_dout_val0(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.dout_val[0])
