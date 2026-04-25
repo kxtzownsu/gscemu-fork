@@ -168,7 +168,7 @@ class Emulator:
     def uart_input(self, input: int) -> None:
         cr50_uart_input(self.ctx.c_fast.uart0, input)
 
-    def set_uart_output_fn(self, fn, user_data) -> None:
+    def set_uart_output_fn(self, fn, user_data = None) -> None:
         cr50_uart_output_callback(self.ctx.c_fast.uart0, fn, user_data)
 
     def start_emulation(self) -> None:

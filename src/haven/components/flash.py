@@ -222,6 +222,11 @@ class FlashController:
         
         self.start_addr = self.start_addr + (self.trans_offset * 4)
         
+        # Undocumented behavior, due to the fact that the Cr50 firmware never
+        # uses FSH_DOUT_VAL0 in prod code. However, with crapple, it has been
+        # figured out that the CONTROL register influences the DOUT_VAL reg.
+        # FSH_DOUT_VAL0 -> CONTROL0
+        # FSH_DOUT_VAL1 -> CONTROL1
         self.dout_val[self.pe_control] = (
             self.ctx.ucmutex.int32_mem_read(self.start_addr)
         )
