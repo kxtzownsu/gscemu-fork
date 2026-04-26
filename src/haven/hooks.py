@@ -25,7 +25,6 @@ from .components.m3 import (
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
-# TODO(appleflyer): hook up with M3 component in the future for interrupts.
 def mem_invalid_access(
     uc: qemu.Uc,
     access,

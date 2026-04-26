@@ -13,6 +13,16 @@ this was written 95% without AI, but one component within the emulator was \
 still written with AI(timels.py). Removal and rewrite of this component is \
 planned soon.
 
+## how to use
+
+GSCEmulator implements an interactive console over stdout to access the Cr50
+console over UART. You may type in the console after running `python3 main.py`,
+but you may need to wait for a while as it is booting. Precisely, the
+```
+Console is enabled; type HELP for help.
+```
+message.
+
 ## support
 
 - haven

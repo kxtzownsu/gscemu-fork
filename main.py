@@ -114,7 +114,6 @@ def setup_uart_output_method(chipemu: havnEmulator, output_method: str):
     else:
         print("setup_uart_output_method recieved an invalid output method!")
 
-# TODO(appleflyer): implement arg system
 def main():
     _argparser = argparse.ArgumentParser(
         prog="gscemu",
