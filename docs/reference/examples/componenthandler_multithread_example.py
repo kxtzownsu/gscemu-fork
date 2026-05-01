@@ -62,9 +62,7 @@ def init_ComponentXX(ctx: EmulatorContext, regs: dict):
     c_emu = ComponentXX()
     c_emu.start_worker()
 
-    reg_fn_map = {
-        regs["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]
-    }
+    reg_fn_map = {regs["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]}
 
     def component_read_handler(
         uc: qemu.Uc,

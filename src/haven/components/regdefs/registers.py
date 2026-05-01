@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 HavenOverflow/appleflyer
-# ruff: noqa
+# fmt: off
 
 """
 All register values derived from

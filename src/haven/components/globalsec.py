@@ -22,10 +22,12 @@ PERMISSION_LOW = 0x00
 PERMISSION_MEDIUM = 0x33
 PERMISSION_HIGH = 0x3C
 PERMISSION_HIGHEST = 0x55
+# fmt: off
 _EXPECTED_SB_BL_SIG = [
     0xe303ec7a, 0x68a03a27, 0xdd18053e, 0x39f8dbbd,
     0x9b553578, 0xb4598244, 0xc59f62d1, 0x61b8509e
 ]
+# fmt: on
 
 
 class HavenGlobalsec:

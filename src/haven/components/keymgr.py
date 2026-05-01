@@ -196,9 +196,7 @@ class ShaEngine:
             for i in self.key_w:
                 derived_hmac_key.extend(struct.pack("<I", i))
 
-            engine = hmac.new(
-                derived_hmac_key, self.input_fifo, hashlib.sha256
-            )
+            engine = hmac.new(derived_hmac_key, self.input_fifo, hashlib.sha256)
         else:
             prints.fatal("unsupported ShaEngine CFG_EN state")
 
@@ -276,9 +274,9 @@ class ShaEngine:
             return
 
         if size == 1:
-                self.input_fifo.append(value & 0xFF)
+            self.input_fifo.append(value & 0xFF)
         elif size == 4:
-                self.input_fifo.extend(struct.pack("<I", value))
+            self.input_fifo.extend(struct.pack("<I", value))
         else:
             prints.warning(f"Unexpected write size={size}, ignoring val.")
 
