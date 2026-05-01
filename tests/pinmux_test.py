@@ -4,6 +4,7 @@
 # run with python3 -m tests.pinmux_test
 
 import termcolor
+
 from lib.pindevice import PinDevice, PinStatus
 
 

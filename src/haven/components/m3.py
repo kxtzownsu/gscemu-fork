@@ -7,25 +7,26 @@ Since this is the CPU, it is tightly integrated with the Uc engine. Therefore,
 this will not be threaded/queued. Instead, we will have one mutex.
 """
 
-import typing
-import time
-import unicorn as qemu
-import threading
 import queue
+import threading
+import time
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+import unicorn as qemu
+
 from env import *
-from lib.logger import GscemuLogger
-from lib.threadutils import FifoLock
+from lib.emulator_context import ComponentObjects, EmulatorContext
 from lib.helpers import (
-    unhandled_register_io,
-    unhandled_register_exit,
-    idx_regs_to_regmap,
     args_lambda_gen,
     armv7m_find_instruction_size,
-    write_u32_to_sp,
+    idx_regs_to_regmap,
     read_u32_from_sp,
+    unhandled_register_exit,
+    unhandled_register_io,
+    write_u32_to_sp,
 )
+from lib.logger import GscemuLogger
+from lib.threadutils import FifoLock
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

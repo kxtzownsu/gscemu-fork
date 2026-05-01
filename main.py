@@ -12,19 +12,19 @@ This main.py file was built for the haven Emulator object, but we will add more
 support in the future.
 """
 
+import argparse
+import fcntl
 import os
+import pty
+import select
+import signal
+import sys
+import termios
 import threading
 import tty
-import pty
-import fcntl
-import select
-import argparse
-import sys
-import signal
-import termios
 
-from lib.logger import GscemuLogger
 from env import *
+from lib.logger import GscemuLogger
 from src.haven import Emulator as havnEmulator
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)

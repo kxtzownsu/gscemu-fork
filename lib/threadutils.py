@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
-import unicorn as qemu
-import threading
 import collections
+import threading
+
+import unicorn as qemu
 
 
 class FifoLock:

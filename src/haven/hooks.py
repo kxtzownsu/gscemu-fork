@@ -9,18 +9,19 @@ to the user. We could make a seperate class in the future instead?
 """
 
 import typing
+
 import unicorn as qemu
 
-from lib.emulator_context import EmulatorContext
 from env import *
+from lib.emulator_context import EmulatorContext
 from lib.logger import GscemuLogger
 
 from .components.m3 import (
-    pend_svcall_interrupt,
     exc_return_handler,
     handle_externally_pended_interrupts,
-    wait_for_interrupt,
+    pend_svcall_interrupt,
     unsafe_pend_sysintr,
+    wait_for_interrupt,
 )
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)

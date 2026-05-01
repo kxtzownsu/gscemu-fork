@@ -1,19 +1,21 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
-import typing
-import unicorn as qemu
 import queue
 import threading
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+import unicorn as qemu
+
 from env import *
-from lib.logger import GscemuLogger
+from lib.emulator_context import ComponentObjects, EmulatorContext
 from lib.helpers import (
+    extract_max_number,
     unhandled_register_exit,
     unhandled_register_io,
-    extract_max_number,
 )
+from lib.logger import GscemuLogger
+
 from .m3 import pend_external_irq, unpend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)

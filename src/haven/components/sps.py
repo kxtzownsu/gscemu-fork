@@ -13,15 +13,16 @@ This is necessary for TPM operations where we can expose the route to TPM
 within gscemulator while keeping the logic accurate.
 """
 
-import typing
-import unicorn as qemu
 import queue
 import threading
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+import unicorn as qemu
+
 from env import *
-from lib.logger import GscemuLogger
+from lib.emulator_context import ComponentObjects, EmulatorContext
 from lib.helpers import unhandled_register_exit
+from lib.logger import GscemuLogger
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

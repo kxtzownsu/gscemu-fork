@@ -2,15 +2,16 @@
 # Copyright (C) 2026 HavenOverflow/appleflyer
 """Example component handler"""
 
-import typing
-import unicorn as qemu
 import queue
 import threading
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+import unicorn as qemu
+
 from env import *
-from lib.logger import GscemuLogger
+from lib.emulator_context import ComponentObjects, EmulatorContext
 from lib.helpers import unhandled_register_exit
+from lib.logger import GscemuLogger
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

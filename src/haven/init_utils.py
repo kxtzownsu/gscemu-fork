@@ -10,9 +10,10 @@
 
 import traceback
 
-from lib.emulator_context import EmulatorContext
 from env import *
+from lib.emulator_context import EmulatorContext
 from lib.logger import GscemuLogger
+
 from .components.regdefs import REG_DEFS
 from .endorsement_cert import PROD_ENDORSEMENT_SEED, PROD_RO_CERT_REGION
 

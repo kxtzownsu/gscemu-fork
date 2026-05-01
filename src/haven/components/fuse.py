@@ -2,10 +2,11 @@
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
 import typing
+
 import unicorn as qemu
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
+from lib.emulator_context import ComponentObjects, EmulatorContext
 from lib.logger import GscemuLogger
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)

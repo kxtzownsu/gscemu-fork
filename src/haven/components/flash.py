@@ -1,20 +1,21 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
-import typing
-import unicorn as qemu
 import queue
 import threading
 import time
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+import unicorn as qemu
+
 from env import *
-from lib.logger import GscemuLogger
+from lib.emulator_context import ComponentObjects, EmulatorContext
 from lib.helpers import (
+    idx_regs_to_regmap,
     unhandled_register_exit,
     unhandled_register_io,
-    idx_regs_to_regmap,
 )
+from lib.logger import GscemuLogger
 
 # flash mappings:
 # bank0, control0 = RO_A + RW_A (0x40000 - 0x7ffff) -> flash bank(0x0 - 0x3ffff)

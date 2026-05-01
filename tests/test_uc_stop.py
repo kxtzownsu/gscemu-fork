@@ -11,9 +11,10 @@ This file shows that the PC is advanced to the next instruction that the
 emulator plans to execute, but the instruction is not actually executed yet.
 """
 
-import unicorn as emu
 import threading
 import time
+
+import unicorn as emu
 
 with open("/Users/appleflyer/titanm/arm-code-assembler/code.bin", "rb") as f:
     code = f.read()

@@ -3,13 +3,14 @@
 
 import inspect
 import typing
-import unicorn as qemu
-from lib.emulator_context import EmulatorContext
-from lib.ucthread import UcThread
-from lib.threadutils import UcMutex
-from env import *
 
+import unicorn as qemu
+
+from env import *
+from lib.emulator_context import EmulatorContext
 from lib.logger import GscemuLogger
+from lib.threadutils import UcMutex
+from lib.ucthread import UcThread
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

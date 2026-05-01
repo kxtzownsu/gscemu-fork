@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 HavenOverflow/appleflyer
+# ruff: noqa
 """
 All register values and SEL values derived from
 https://chromium.googlesource.com/chromiumos/platform/ec/+/a766634/chip/g/hw_regdefs.h
@@ -249,16 +250,16 @@ PINMUX_REGS = { # Other PINMUX regs
 
 PINMUX_SEL_REGS_LIST = []
 for v in PINMUX_SEL_REGS.values():
-    if type(v) == list:
+    if type(v) is list:
         for i in v:
             PINMUX_SEL_REGS_LIST.append(i)
-    elif type(v) == int:
+    elif type(v) is int:
         PINMUX_SEL_REGS_LIST.append(v)
 
 PINMUX_CTL_REGS_LIST = []
 for v in PINMUX_CTL_REGS.values():
-    if type(v) == list:
+    if type(v) is list:
         for i in v:
             PINMUX_CTL_REGS_LIST.append(i)
-    elif type(v) == int:
+    elif type(v) is int:
         PINMUX_CTL_REGS_LIST.append(v)

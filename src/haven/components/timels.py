@@ -7,16 +7,18 @@ not have accurate enough ticks, and honestly this is overall a bad way to go
 around it.
 """
 
-import typing
-import time
-import unicorn as qemu
 import queue
 import threading
+import time
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+import unicorn as qemu
+
 from env import *
+from lib.emulator_context import ComponentObjects, EmulatorContext
+from lib.helpers import args_lambda_gen, unhandled_register_exit
 from lib.logger import GscemuLogger
-from lib.helpers import unhandled_register_exit, args_lambda_gen
+
 from .m3 import pend_external_irq, unpend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)

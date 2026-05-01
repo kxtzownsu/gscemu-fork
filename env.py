@@ -2,8 +2,9 @@
 # Copyright (C) 2025 HavenOverflow/appleflyer
 
 from pathlib import Path
-import fw.rom
+
 import fw.haven
+import fw.rom
 from lib.logger import GscemuLoggerSettings
 
 GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(

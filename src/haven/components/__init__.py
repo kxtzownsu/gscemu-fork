@@ -1,26 +1,28 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
-from . import regdefs
+from lib.emulator_context import ComponentObjects, EmulatorContext
 
 # Manual import of the component handlers. Refactor in the future?
 # Probably not.
-from . import m3
-from . import uart
-from . import fuse
-from . import flash
-from . import globalsec
-from . import keymgr
-from . import timels
-from . import crypto
-from . import usb
-from . import gpio
-from . import trng
-from . import pinmux
-from . import swdp
-from . import pmu
-from . import sps
+from . import (
+    crypto,
+    flash,
+    fuse,
+    globalsec,
+    gpio,
+    keymgr,
+    m3,
+    pinmux,
+    pmu,
+    regdefs,
+    sps,
+    swdp,
+    timels,
+    trng,
+    uart,
+    usb,
+)
 
 
 class ComponentFastLookup:

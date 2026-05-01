@@ -6,17 +6,19 @@ This is a very complicated component, as it requires a lot of integration
 with other components, such as UART, SPS, GPIO etc.
 """
 
-import typing
-import unicorn as qemu
 import queue
 import threading
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+import unicorn as qemu
+
 from env import *
-from lib.pindevice import PinDevice, PinStatus
+from lib.emulator_context import ComponentObjects, EmulatorContext
+from lib.helpers import idx_regs_to_regmap, unhandled_register_exit
 from lib.logger import GscemuLogger
+from lib.pindevice import PinDevice, PinStatus
+
 from .regdefs.pinmux_registers import *
-from lib.helpers import unhandled_register_exit, idx_regs_to_regmap
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

@@ -10,8 +10,9 @@ able to create one Emulator object.
 
 # Needed for type hints
 import unicorn as qemu
-from lib.ucthread import UcThread
+
 from lib.threadutils import UcMutex
+from lib.ucthread import UcThread
 
 
 class ComponentObjects:

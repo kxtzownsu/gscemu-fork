@@ -2,28 +2,30 @@
 # Copyright (C) 2026 HavenOverflow/appleflyer
 """CRYTPO bignum accelerator implementation."""
 
-import unicorn as qemu
 import queue
 import threading
-import typing
-import traceback
 import time
+import traceback
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
-from env import *
-from lib.logger import GscemuLogger
-from lib.helpers import (
-    unhandled_register_exit,
-    unhandled_register_io,
-    idx_regs_to_regmap,
-)
-from .m3 import pend_external_irq, unpend_external_irq
-from .timels import component_start_timer_debug, component_stop_timer_debug
+import unicorn as qemu
+from ot_dsim.bignum_lib.instructions import InsContext as CryptoEmuICtx
+from ot_dsim.bignum_lib.instructions import InstructionFactory as CryptoEmuIF
 
 # ot_dsim package imports.
 from ot_dsim.bignum_lib.machine import Machine as CryptoEmu
-from ot_dsim.bignum_lib.instructions import InstructionFactory as CryptoEmuIF
-from ot_dsim.bignum_lib.instructions import InsContext as CryptoEmuICtx
+
+from env import *
+from lib.emulator_context import ComponentObjects, EmulatorContext
+from lib.helpers import (
+    idx_regs_to_regmap,
+    unhandled_register_exit,
+    unhandled_register_io,
+)
+from lib.logger import GscemuLogger
+
+from .m3 import pend_external_irq, unpend_external_irq
+from .timels import component_start_timer_debug, component_stop_timer_debug
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

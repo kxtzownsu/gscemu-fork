@@ -2,6 +2,7 @@
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
 import threading
+
 import unicorn as qemu
 
 
@@ -51,7 +52,7 @@ class UcThread:
             self.stop_lock.clear()
             self.uc.emu_stop()
             return True
-        except:
+        except Exception:
             return False
 
     def emu_halt(self) -> bool:
@@ -63,5 +64,5 @@ class UcThread:
             self.exit_thread_signal.set()
             self.uc.emu_stop()
             return True
-        except:
+        except Exception:
             return False

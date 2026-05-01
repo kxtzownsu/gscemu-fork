@@ -3,4 +3,4 @@
 
 """File to expose the haven Emulator object externally."""
 
-from .emulator import Emulator
+from .emulator import Emulator  # noqa: F401

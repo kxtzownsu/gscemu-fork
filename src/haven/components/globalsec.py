@@ -2,18 +2,19 @@
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
 import typing
+
 import unicorn as qemu
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
+from lib.emulator_context import ComponentObjects, EmulatorContext
+from lib.helpers import (
+    args_lambda_gen,
+    idx_regs_to_regmap,
+    unhandled_register_exit,
+    unhandled_register_io,
+)
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
-from lib.helpers import (
-    unhandled_register_io,
-    unhandled_register_exit,
-    idx_regs_to_regmap,
-    args_lambda_gen,
-)
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -274,14 +275,6 @@ class HavenGlobalsec:
     def write_dummykey(self, size: int, value: int, index: int) -> None:
         with self.mutex:
             self.dummykey[index] = value
-
-    def read_dbg_control(self, size: int) -> None:
-        with self.mutex:
-            return self.dbg_control
-
-    def write_dbg_control(self, size: int, value: int) -> None:
-        with self.mutex:
-            self.dbg_control = value
 
     def read_sb_comp_status(self, size: int) -> None:
         with self.mutex:

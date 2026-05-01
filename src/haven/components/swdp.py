@@ -12,13 +12,14 @@ indeed a debug peripheral of the Cortex-M3.
 """
 
 import typing
+
 import unicorn as qemu
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
+from lib.emulator_context import ComponentObjects, EmulatorContext
+from lib.helpers import unhandled_register_exit
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
-from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

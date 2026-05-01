@@ -6,16 +6,17 @@ On real silicon, the other registers matter. To not overcomplicate things, let's
 just stick to the built-in secrets module for now.
 """
 
-import typing
-import unicorn as qemu
 import queue
-import threading
 import secrets
+import threading
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+import unicorn as qemu
+
 from env import *
-from lib.logger import GscemuLogger
+from lib.emulator_context import ComponentObjects, EmulatorContext
 from lib.helpers import unhandled_register_exit, unhandled_register_io
+from lib.logger import GscemuLogger
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

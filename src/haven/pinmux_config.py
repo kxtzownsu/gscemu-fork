@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
-from .components.pinmux import Cr50Pinmux
-from lib.pindevice import PinStatus
 from env import *
+from lib.pindevice import PinStatus
+
+from .components.pinmux import Cr50Pinmux
 
 
 def init_strap_config(pinmux: Cr50Pinmux):

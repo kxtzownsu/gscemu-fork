@@ -24,15 +24,14 @@ The H1B3C's CPU runs off the Cortex-M3 armv7m spec.
 import unicorn as qemu
 
 from lib.emulator_context import EmulatorContext
-from .components import ComponentFastLookup
+from lib.logger import GscemuLogger
+
+from . import hooks
+from .components import ComponentFastLookup, initialize_components
+from .components.regdefs import MMIO_REG_DEFS, REG_DEFS
+from .components.uart import cr50_uart_input, cr50_uart_output_callback
 from .init_utils import *
 from .pinmux_config import *
-from . import hooks
-from .components.regdefs import REG_DEFS, MMIO_REG_DEFS
-from lib.logger import GscemuLogger
-from .components import initialize_components
-
-from .components.uart import cr50_uart_input, cr50_uart_output_callback
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 

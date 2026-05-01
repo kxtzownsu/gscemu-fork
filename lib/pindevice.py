@@ -2,8 +2,8 @@
 # Copyright (C) 2026 HavenOverflow/appleflyer
 from __future__ import annotations
 
-import typing
 import enum
+import typing
 
 from env import *
 from lib.logger import GscemuLogger

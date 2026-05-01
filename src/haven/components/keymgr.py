@@ -10,25 +10,26 @@ For the SHA engine, it has been rewritten from the old gscemu v2 impl.
 FOr the AES engine, it has fundamentally not changed from gscemu v2.
 """
 
-import typing
-import unicorn as qemu
-import queue
-import threading
-import struct
 import hashlib
 import hmac
+import queue
+import struct
+import threading
+import typing
+
+import unicorn as qemu
 from Crypto.Cipher import AES as domeAES
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
-from lib.threadutils import FifoLock
-from lib.logger import GscemuLogger
+from lib.emulator_context import ComponentObjects, EmulatorContext
 from lib.helpers import (
-    unhandled_register_io,
-    unhandled_register_exit,
-    idx_regs_to_regmap,
     args_lambda_gen,
+    idx_regs_to_regmap,
+    unhandled_register_exit,
+    unhandled_register_io,
 )
+from lib.logger import GscemuLogger
+from lib.threadutils import FifoLock
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -123,57 +124,56 @@ class ShaEngine:
         self.opqueue.put([target_fn, (size, value)])
 
     def trig_process(self):
-        match self.trig:
-            case 1:  # BIT(0)
-                # If this is a USE_CERT operation, just ignore it and say
-                # the op is done.
-                if self.use_cert["ENABLE"]:
-                    # Use a debug instead of warning since this is intended.
-                    prints.debug("SHA_USE_CERT usage is not supported!")
-                    self.use_cert["ENABLE"] = 0
-                    self.itop = 1
-                else:
-                    # Not a USE_CERT operation.
-                    # Enable recieving data for LIVESTREAM or oneshot.
-                    self.recieve_data = True
-
-                self.trig &= ~1  # Clear the TRIG bit
-
-            case 2:  # BIT(1)
-                # Wipe all the values in the SHA engine.
-                self.recieve_data = False
-                self.itop = 0
-                self.msglen_lo = 0
-                self.msglen_hi = 0
-                self.msglen_full = 0
-                self.en = 0
-                self.wr_en = 0
-                self.input_fifo = bytearray()
-                self.sts_h = [0] * 8
-
+        if self.trig == 1:  # BIT(0)
+            # If this is a USE_CERT operation, just ignore it and say
+            # the op is done.
+            if self.use_cert["ENABLE"]:
+                # Use a debug instead of warning since this is intended.
+                prints.debug("SHA_USE_CERT usage is not supported!")
                 self.use_cert["ENABLE"] = 0
-                self.use_cert["INDEX"] = 0
-                self.use_cert["CHECK_ONLY"] = 0
+                self.itop = 1
+            else:
+                # Not a USE_CERT operation.
+                # Enable recieving data for LIVESTREAM or oneshot.
+                self.recieve_data = True
 
-                self.trig &= ~2  # Clear the TRIG bit
+            self.trig &= ~1  # Clear the TRIG bit
 
-            case 4:  # BIT(2)
-                # Undocumented and unused TRIG value.
-                self.trig &= ~4  # Clear the TRIG bit
+        elif self.trig == 2:  # BIT(1)
+            # Wipe all the values in the SHA engine.
+            self.recieve_data = False
+            self.itop = 0
+            self.msglen_lo = 0
+            self.msglen_hi = 0
+            self.msglen_full = 0
+            self.en = 0
+            self.wr_en = 0
+            self.input_fifo = bytearray()
+            self.sts_h = [0] * 8
 
-            case 8:  # BIT(3)
-                # This means the firmware has finished streaming the data to
-                # hash. We should kick off the SHA engine. This is only
-                # applicable in LIVESTREAM mode.
+            self.use_cert["ENABLE"] = 0
+            self.use_cert["INDEX"] = 0
+            self.use_cert["CHECK_ONLY"] = 0
 
-                if self.en & 16:  # BIT(4)
-                    self.recieve_data = False
-                    self.start_hash = True
+            self.trig &= ~2  # Clear the TRIG bit
 
-                self.trig &= ~8  # Clear the TRIG bit
+        elif self.trig == 4:  # BIT(2)
+            # Undocumented and unused TRIG value.
+            self.trig &= ~4  # Clear the TRIG bit
 
-            case _:
-                prints.fatal("SHA_TRIG received an invalid value")
+        elif self.trig == 8:  # BIT(3)
+            # This means the firmware has finished streaming the data to
+            # hash. We should kick off the SHA engine. This is only
+            # applicable in LIVESTREAM mode.
+
+            if self.en & 16:  # BIT(4)
+                self.recieve_data = False
+                self.start_hash = True
+
+            self.trig &= ~8  # Clear the TRIG bit
+
+        else:
+            prints.fatal("SHA_TRIG received an invalid value")
 
     def oneshot_check(self):
         if len(self.input_fifo) == self.msglen_full:
@@ -187,21 +187,20 @@ class ShaEngine:
         engine = None
         engine_settings = self.en & (2 | 32)  # BIT(1) | BIT(5)
 
-        match engine_settings:
-            case 0:  # SHA256
-                engine = hashlib.sha256(self.input_fifo)
-            case 2:  # SHA1
-                engine = hashlib.sha1(self.input_fifo)
-            case 32:  # SHA256 + HMAC
-                derived_hmac_key = bytearray()
-                for i in self.key_w:
-                    derived_hmac_key.extend(struct.pack("<I", i))
+        if engine_settings == 0:  # SHA256
+            engine = hashlib.sha256(self.input_fifo)
+        elif engine_settings == 2:  # SHA1
+            engine = hashlib.sha1(self.input_fifo)
+        elif engine_settings == 32:  # SHA256 + HMAC
+            derived_hmac_key = bytearray()
+            for i in self.key_w:
+                derived_hmac_key.extend(struct.pack("<I", i))
 
-                engine = hmac.new(
-                    derived_hmac_key, self.input_fifo, hashlib.sha256
-                )
-            case _:
-                prints.fatal("unsupported ShaEngine CFG_EN state")
+            engine = hmac.new(
+                derived_hmac_key, self.input_fifo, hashlib.sha256
+            )
+        else:
+            prints.fatal("unsupported ShaEngine CFG_EN state")
 
         digest = engine.digest()
         for i in range(8):
@@ -276,13 +275,12 @@ class ShaEngine:
         if not self.recieve_data:
             return
 
-        match size:
-            case 1:
+        if size == 1:
                 self.input_fifo.append(value & 0xFF)
-            case 4:
+        elif size == 4:
                 self.input_fifo.extend(struct.pack("<I", value))
-            case _:
-                prints.warning(f"Unexpected write size={size}, ignoring val.")
+        else:
+            prints.warning(f"Unexpected write size={size}, ignoring val.")
 
     def read_sts_h(self, size: int, queue: queue.Queue, index: int) -> None:
         queue.put(self.sts_h[index])
@@ -619,7 +617,7 @@ class AesEngine:
             val = self.rfifo.get_nowait()
             if self.rfifo.qsize() == 0:
                 self.rfifo_empty = True
-        except:
+        except Exception:
             val = 0
 
         queue.put(val)

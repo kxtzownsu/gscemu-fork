@@ -1,21 +1,21 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
-import typing
-import unicorn as qemu
 import queue
 import threading
+import typing
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+import unicorn as qemu
+
 from env import *
-from lib.pindevice import PinDevice, PinStatus
-from env import *
-from lib.logger import GscemuLogger
+from lib.emulator_context import ComponentObjects, EmulatorContext
 from lib.helpers import (
-    unhandled_register_exit,
     idx_regs_to_regmap,
     pattern_list_gen,
+    unhandled_register_exit,
 )
+from lib.logger import GscemuLogger
+from lib.pindevice import PinDevice, PinStatus
 
 from .m3 import pend_external_irq, unpend_external_irq
 
