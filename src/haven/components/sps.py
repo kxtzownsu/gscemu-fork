@@ -25,6 +25,7 @@ from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
+
 class SPISlaveDevice:
     def __init__(self, ctx: EmulatorContext):
         self.ctx = ctx
@@ -34,7 +35,7 @@ class SPISlaveDevice:
 
         # Used when slave has nothing to put on MISO on a clock pulse.
         self.tx_dummy_word = 0
-        
+
         # SPI settings CTRL register
         self.ctrl = 0
         # Used to control if we should trigger the interrupt.
@@ -58,7 +59,7 @@ class SPISlaveDevice:
                 if self.fifo_ctrl & 0x1:
                     # Reset the TX FIFO, then deassert _RST.
                     self.fifo_ctrl &= ~0x1
-                
+
                 if self.fifo_ctrl & 0x8:
                     # Reset the RX FIFO, then deassert _RST.
                     self.fifo_ctrl &= ~0x8
@@ -77,7 +78,7 @@ class SPISlaveDevice:
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
-        
+
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
@@ -90,7 +91,7 @@ class SPISlaveDevice:
     def read_dummy_word(self, size: int, queue: queue.Queue):
         # I don't think we can read from DUMMY_WORD, it's unclear.
         queue.put(0)
-    
+
     def write_dummy_word(self, size: int, value: int):
         self.tx_dummy_word = value
 
@@ -106,13 +107,13 @@ class SPISlaveDevice:
     def write_istate(self, size: int, value: int):
         # Only the system can assert or deassert ISTATE unless by ISTATE_CLR
         return
-    
+
     def read_istate_clr(self, size: int, queue: queue.Queue):
         queue.put(0)
-    
+
     def write_istate_clr(self, size: int, value: int):
         for bit in range(32):
-            bs = (1 << bit)
+            bs = 1 << bit
             if not value & bs:
                 continue
 
@@ -134,6 +135,7 @@ class SPISlaveDevice:
     def write_rxfifo_threshold(self, size: int, value: int):
         self.rxfifo_threshold = value
 
+
 def init_SPISlaveDevice(ctx: EmulatorContext, regs: dict):
     c_emu = SPISlaveDevice(ctx)
     c_emu.start_worker()
@@ -146,7 +148,8 @@ def init_SPISlaveDevice(ctx: EmulatorContext, regs: dict):
         regs["ISTATE_CLR"]: [c_emu.read_istate_clr, c_emu.write_istate_clr],
         regs["FIFO_CTRL"]: [c_emu.read_fifo_ctrl, c_emu.write_fifo_ctrl],
         regs["RXFIFO_THRESHOLD"]: [
-            c_emu.read_rxfifo_threshold, c_emu.write_rxfifo_threshold
+            c_emu.read_rxfifo_threshold,
+            c_emu.write_rxfifo_threshold,
         ],
     }
 

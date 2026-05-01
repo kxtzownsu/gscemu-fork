@@ -3,15 +3,15 @@
 
 import threading
 import unicorn as qemu
-import time
+
 
 class UcThread:
     def __init__(self, uc: qemu.Uc):
         self.uc = uc
-        
+
         self.emu_thread = None
-        self.stop_lock = threading.Event() # set = unpause, clear = pause
-        
+        self.stop_lock = threading.Event()  # set = unpause, clear = pause
+
         self.exit_thread_signal = threading.Event()
 
     def emu_thread_worker(self):
@@ -24,11 +24,10 @@ class UcThread:
                 # have sufficient time to clean up?
                 return
 
-            # TODO(appleflyer): Change this to uc.emu_run when pr is merged into 
+            # TODO(appleflyer): Change this to uc.emu_run when pr is merged into
             # 2.1.5-dev.
             self.uc.emu_start(
-                self.uc.reg_read(qemu.arm_const.UC_ARM_REG_PC) | 1, 
-                0xFFFFFFFF
+                self.uc.reg_read(qemu.arm_const.UC_ARM_REG_PC) | 1, 0xFFFFFFFF
             )
 
     def emu_start(self) -> bool:
@@ -47,7 +46,7 @@ class UcThread:
     def emu_pause(self) -> bool:
         if not self.emu_thread:
             return False
-        
+
         try:
             self.stop_lock.clear()
             self.uc.emu_stop()
@@ -58,7 +57,7 @@ class UcThread:
     def emu_halt(self) -> bool:
         if not self.emu_thread:
             return False
-        
+
         try:
             self.stop_lock.set()
             self.exit_thread_signal.set()

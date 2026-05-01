@@ -26,7 +26,7 @@ GSCEMULATOR_PC_LOGGING_SETTINGS = {
 
 # -- gscemu debug flags --
 # These flags change how the emulator works internally during runtime, and
-# may cause unintended effects when any are set. For a prod run, these flags 
+# may cause unintended effects when any are set. For a prod run, these flags
 # should be disabled!
 
 # Always force SB_COMP_STATUS to True within GLOBALSEC. This allows garbage
@@ -35,7 +35,7 @@ GSCEMULATOR_PC_LOGGING_SETTINGS = {
 GSCEMULATOR_FORCE_SB_COMP_STATUS = True
 
 # Disable the CRYPTO engine and just claim the CRYPTO engine has finished
-# op. This speeds up the emulator as the CRYPTO engine has large speed overhead, 
+# op. This speeds up the emulator as the CRYPTO engine has large speed overhead,
 # but the CRYPTO engine will be unusable.
 GSCEMULATOR_DISABLE_CRYPTO_ENGINE = False
 

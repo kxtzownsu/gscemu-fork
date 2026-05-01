@@ -15,17 +15,15 @@ import secrets
 from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from lib.helpers import (
-    unhandled_register_exit, 
-    unhandled_register_io
-)
+from lib.helpers import unhandled_register_exit, unhandled_register_io
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
+
 
 class TRNGEngine:
     def __init__(self, ctx: EmulatorContext):
         self.ctx = ctx
-        
+
         self.opthread = None
         self.opqueue = queue.Queue()
 
@@ -81,13 +79,13 @@ class TRNGEngine:
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
-        
+
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
     def read_read_data(self, size: int, queue: queue.Queue):
         queue.put(secrets.randbits(32))
-    
+
     def write_read_data(self, size: int, value: int):
         unhandled_register_io(prints, "WRITE", "TRNG", "READ_DATA")
         return
@@ -182,6 +180,7 @@ class TRNGEngine:
     def write_output_time_counter(self, size: int, value: int):
         self.output_time_counter = value
 
+
 def init_TRNGEngine(ctx: EmulatorContext, regs: dict):
     c_emu = TRNGEngine(ctx)
     c_emu.start_worker()
@@ -189,52 +188,46 @@ def init_TRNGEngine(ctx: EmulatorContext, regs: dict):
     reg_fn_map = {
         regs["READ_DATA"]: [c_emu.read_read_data, c_emu.write_read_data],
         regs["SECURE_POST_PROCESSING_CTRL"]: [
-            c_emu.read_secure_post_processing_ctrl, 
-            c_emu.write_secure_post_processing_ctrl
+            c_emu.read_secure_post_processing_ctrl,
+            c_emu.write_secure_post_processing_ctrl,
         ],
         regs["POST_PROCESSING_CTRL"]: [
-            c_emu.read_post_processing_ctrl, 
-            c_emu.write_post_processing_ctrl
+            c_emu.read_post_processing_ctrl,
+            c_emu.write_post_processing_ctrl,
         ],
-        regs["LDO_CTRL"]: [
-            c_emu.read_ldo_ctrl, 
-            c_emu.write_ldo_ctrl
-        ],
-        regs["ANALOG_CTRL"]: [
-            c_emu.read_analog_ctrl, 
-            c_emu.write_analog_ctrl
-        ],
+        regs["LDO_CTRL"]: [c_emu.read_ldo_ctrl, c_emu.write_ldo_ctrl],
+        regs["ANALOG_CTRL"]: [c_emu.read_analog_ctrl, c_emu.write_analog_ctrl],
         regs["ALLOWED_VALUES"]: [
-            c_emu.read_allowed_values, 
-            c_emu.write_allowed_values
+            c_emu.read_allowed_values,
+            c_emu.write_allowed_values,
         ],
         regs["SLICE_MAX_UPPER_LIMIT"]: [
-            c_emu.read_slice_max_upper_limit, 
-            c_emu.write_slice_max_upper_limit
+            c_emu.read_slice_max_upper_limit,
+            c_emu.write_slice_max_upper_limit,
         ],
         regs["SLICE_MIN_LOWER_LIMIT"]: [
-            c_emu.read_slice_min_lower_limit, 
-            c_emu.write_slice_min_lower_limit
+            c_emu.read_slice_min_lower_limit,
+            c_emu.write_slice_min_lower_limit,
         ],
         regs["POWER_DOWN_B"]: [
-            c_emu.read_power_down_b, 
-            c_emu.write_power_down_b
+            c_emu.read_power_down_b,
+            c_emu.write_power_down_b,
         ],
         regs["GO_EVENT"]: [c_emu.read_go_event, c_emu.write_go_event],
         regs["STOP_WORK"]: [c_emu.read_stop_work, c_emu.write_stop_work],
         regs["EMPTY"]: [c_emu.read_empty, c_emu.write_empty],
         regs["TIMEOUT_COUNTER"]: [
-            c_emu.read_timeout_counter, 
-            c_emu.write_timeout_counter
+            c_emu.read_timeout_counter,
+            c_emu.write_timeout_counter,
         ],
         regs["TIMEOUT_MAX_TRY_NUM"]: [
-            c_emu.read_timeout_max_try_num, 
-            c_emu.write_timeout_max_try_num
+            c_emu.read_timeout_max_try_num,
+            c_emu.write_timeout_max_try_num,
         ],
         regs["FSM_STATE"]: [c_emu.read_fsm_state, c_emu.write_fsm_state],
         regs["OUTPUT_TIME_COUNTER"]: [
-            c_emu.read_output_time_counter, 
-            c_emu.write_output_time_counter
+            c_emu.read_output_time_counter,
+            c_emu.write_output_time_counter,
         ],
     }
 

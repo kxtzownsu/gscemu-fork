@@ -10,12 +10,13 @@ from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
 from lib.helpers import (
-    unhandled_register_exit, 
+    unhandled_register_exit,
     unhandled_register_io,
-    idx_regs_to_regmap
+    idx_regs_to_regmap,
 )
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
+
 
 class PowerManagementUnit:
     def __init__(self, ctx: EmulatorContext):
@@ -37,10 +38,10 @@ class PowerManagementUnit:
         # 3 -> B1
         # 4 -> B2
         self.chip_id = {
-            "JTAG_STANDARD": 0x1, # bit 0
-            "MFG_ID": 0x4a6, # bits 1-11
-            "PART_NUM": 0x4856, # bits 12-27
-            "REVISION": 4, # bits 28-31
+            "JTAG_STANDARD": 0x1,  # bit 0
+            "MFG_ID": 0x4A6,  # bits 1-11
+            "PART_NUM": 0x4856,  # bits 12-27
+            "REVISION": 4,  # bits 28-31
         }
 
         self.pwrdn_scratch = [0] * 32
@@ -77,7 +78,7 @@ class PowerManagementUnit:
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
-        
+
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
@@ -85,15 +86,15 @@ class PowerManagementUnit:
         val = 0
         for bit in range(32):
             if self.periph_clocks_en[bit]:
-                val |= (1 << bit)
+                val |= 1 << bit
 
         queue.put(val)
-    
+
     def write_periclkset0(self, size: int, value: int):
         for bit in range(32):
             if self.periph_clocks_en[bit]:
                 continue
-            
+
             if value & (1 << bit):
                 self.periph_clocks_en[bit] = True
 
@@ -101,83 +102,83 @@ class PowerManagementUnit:
         val = 0
         for bit in range(32):
             if self.periph_clocks_en[bit]:
-                val |= (1 << bit)
+                val |= 1 << bit
 
         queue.put(val)
-    
+
     def write_periclkclr0(self, size: int, value: int):
         for bit in range(32):
             if not self.periph_clocks_en[bit]:
                 continue
-            
+
             if value & (1 << bit):
                 self.periph_clocks_en[bit] = False
 
     def read_periclkset1(self, size: int, queue: queue.Queue):
         val = 0
         for bit in range(16):
-            if self.periph_clocks_en[bit+32]:
-                val |= (1 << bit)
+            if self.periph_clocks_en[bit + 32]:
+                val |= 1 << bit
 
         queue.put(val)
 
     def write_periclkset1(self, size: int, value: int):
         for bit in range(16):
-            if self.periph_clocks_en[bit+32]:
+            if self.periph_clocks_en[bit + 32]:
                 continue
-            
+
             if value & (1 << bit):
-                self.periph_clocks_en[bit+32] = True
+                self.periph_clocks_en[bit + 32] = True
 
     def read_periclkclr1(self, size: int, queue: queue.Queue):
         val = 0
         for bit in range(16):
-            if self.periph_clocks_en[bit+32]:
-                val |= (1 << bit)
+            if self.periph_clocks_en[bit + 32]:
+                val |= 1 << bit
 
         queue.put(val)
-    
+
     def write_periclkclr1(self, size: int, value: int):
         for bit in range(16):
-            if not self.periph_clocks_en[bit+32]:
+            if not self.periph_clocks_en[bit + 32]:
                 continue
-            
+
             if value & (1 << bit):
-                self.periph_clocks_en[bit+32] = False
+                self.periph_clocks_en[bit + 32] = False
 
     def read_chip_id(self, size: int, queue: queue.Queue):
         val = 0
-        val |= (self.chip_id["JTAG_STANDARD"] & 0x1)
-        val |= (self.chip_id["MFG_ID"] << 1) & 0xffe
-        val |= (self.chip_id["PART_NUM"] << 12) & 0xffff000
-        val |= (self.chip_id["REVISION"] << 28) & 0xf0000000
+        val |= self.chip_id["JTAG_STANDARD"] & 0x1
+        val |= (self.chip_id["MFG_ID"] << 1) & 0xFFE
+        val |= (self.chip_id["PART_NUM"] << 12) & 0xFFFF000
+        val |= (self.chip_id["REVISION"] << 28) & 0xF0000000
 
         queue.put(val)
-    
+
     def write_chip_id(self, size: int, value: int):
         unhandled_register_io(prints, "WRITE", "PMU", "CHIP_ID")
 
     def read_low_power_dis(self, size: int, queue: queue.Queue):
         queue.put(self.low_power_seq)
-    
+
     def write_low_power_dis(self, size: int, value: int):
         self.low_power_seq = value
 
     def read_exitpd_mask(self, size: int, queue: queue.Queue):
         queue.put(self.exitpd_mask)
-    
+
     def write_exitpd_mask(self, size: int, value: int):
         self.exitpd_mask = value
 
     def read_sw_pdb(self, size: int, queue: queue.Queue):
         queue.put(self.sw_pdb)
-    
+
     def write_sw_pdb(self, size: int, value: int):
         self.sw_pdb = value
 
     def read_int_enable(self, size: int, queue: queue.Queue):
         queue.put(int(self.int_enable))
-    
+
     def write_int_enable(self, size: int, value: int):
         self.int_enable = bool(value)
 
@@ -188,16 +189,16 @@ class PowerManagementUnit:
         if 0 <= index <= 7:
             if self.pwrdn_scratch_lock[0]:
                 return
-            
+
         elif 8 <= index <= 15:
             if self.pwrdn_scratch_lock[1]:
                 return
-            
+
         self.pwrdn_scratch[index] = value
 
     def read_pwrdn_scratch_lock(
-            self, size: int, queue: queue.Queue, index: int
-        ):
+        self, size: int, queue: queue.Queue, index: int
+    ):
         queue.put(int(self.pwrdn_scratch_lock[index]))
 
     def write_pwrdn_scratch_lock(self, size: int, value: int, index: int):
@@ -228,7 +229,7 @@ class PowerManagementUnit:
             pass
 
         return
-    
+
     def read_rst_wr_en(self, size: int, queue: queue.Queue, index: int):
         queue.put(int(self.rst_wr_en[index]))
 
@@ -246,7 +247,7 @@ class PowerManagementUnit:
         val = 0
         for bit in range(4):
             if self.long_life_scratch_wr_en[bit]:
-                val |= (1 << bit)
+                val |= 1 << bit
 
         queue.put(val)
 
@@ -257,6 +258,7 @@ class PowerManagementUnit:
             else:
                 self.long_life_scratch_wr_en[bit] = False
 
+
 def init_PowerManagementUnit(ctx: EmulatorContext, regs: dict):
     c_emu = PowerManagementUnit(ctx)
     c_emu.start_worker()
@@ -265,49 +267,52 @@ def init_PowerManagementUnit(ctx: EmulatorContext, regs: dict):
         regs["CHIP_ID"]: [c_emu.read_chip_id, c_emu.write_chip_id],
         regs["SW_PDB"]: [c_emu.read_sw_pdb, c_emu.write_sw_pdb],
         regs["INT_ENABLE"]: [c_emu.read_int_enable, c_emu.write_int_enable],
-
         regs["EXITPD_MASK"]: [c_emu.read_exitpd_mask, c_emu.write_exitpd_mask],
         regs["LOW_POWER_DIS"]: [
-            c_emu.read_low_power_dis, c_emu.write_low_power_dis
+            c_emu.read_low_power_dis,
+            c_emu.write_low_power_dis,
         ],
-
         regs["PERICLKSET0"]: [c_emu.read_periclkset0, c_emu.write_periclkset0],
         regs["PERICLKCLR0"]: [c_emu.read_periclkclr0, c_emu.write_periclkclr0],
         regs["PERICLKSET1"]: [c_emu.read_periclkset1, c_emu.write_periclkset1],
         regs["PERICLKCLR1"]: [c_emu.read_periclkclr1, c_emu.write_periclkclr1],
-
         regs["CLRRST"]: [c_emu.read_clrrst, c_emu.write_clrrst],
         regs["RSTSRC"]: [c_emu.read_rstsrc, c_emu.write_rstsrc],
-
         regs["LONG_LIFE_SCRATCH_WR_EN"]: [
-            c_emu.read_long_life_scratch_wr_en, c_emu.write_long_life_scratch_wr_en
+            c_emu.read_long_life_scratch_wr_en,
+            c_emu.write_long_life_scratch_wr_en,
         ],
     }
 
     idx_regs_to_regmap(
-        reg_fn_map, regs["LONG_LIFE_SCRATCH"],
-        c_emu.read_long_life_scratch, c_emu.write_long_life_scratch
+        reg_fn_map,
+        regs["LONG_LIFE_SCRATCH"],
+        c_emu.read_long_life_scratch,
+        c_emu.write_long_life_scratch,
     )
 
     idx_regs_to_regmap(
-        reg_fn_map, regs["PWRDN_SCRATCH"],
-        c_emu.read_pwrdn_scratch, c_emu.write_pwrdn_scratch
+        reg_fn_map,
+        regs["PWRDN_SCRATCH"],
+        c_emu.read_pwrdn_scratch,
+        c_emu.write_pwrdn_scratch,
     )
 
     idx_regs_to_regmap(
-        reg_fn_map, regs["PWRDN_SCRATCH_LOCK"],
-        c_emu.read_pwrdn_scratch_lock, c_emu.write_pwrdn_scratch_lock
+        reg_fn_map,
+        regs["PWRDN_SCRATCH_LOCK"],
+        c_emu.read_pwrdn_scratch_lock,
+        c_emu.write_pwrdn_scratch_lock,
     )
 
     idx_regs_to_regmap(
-        reg_fn_map, regs["RST_WR_EN"],
-        c_emu.read_rst_wr_en, c_emu.write_rst_wr_en
+        reg_fn_map,
+        regs["RST_WR_EN"],
+        c_emu.read_rst_wr_en,
+        c_emu.write_rst_wr_en,
     )
 
-    idx_regs_to_regmap(
-        reg_fn_map, regs["RST"],
-        c_emu.read_rst, c_emu.write_rst
-    )
+    idx_regs_to_regmap(reg_fn_map, regs["RST"], c_emu.read_rst, c_emu.write_rst)
 
     def component_read_handler(
         uc: qemu.Uc,

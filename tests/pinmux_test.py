@@ -6,45 +6,44 @@
 import termcolor
 from lib.pindevice import PinDevice, PinStatus
 
+
 def test_single_pin():
     diob4 = PinDevice()
     diob4.set_pininfo(PinStatus.PULLUP, 1000.0)
 
-    return (
-        (diob4.read_resistance() == 1000.0)
-        and (diob4.read_pdpu() == PinStatus.PULLUP)
+    return (diob4.read_resistance() == 1000.0) and (
+        diob4.read_pdpu() == PinStatus.PULLUP
     )
+
 
 def test_pin_masking():
     diob4 = PinDevice()
     diob4.set_pininfo(PinStatus.PULLUP, 1000.0)
 
-    cond1 = (
-        (diob4.read_resistance() == 1000.0) 
-        and (diob4.read_pdpu() == PinStatus.PULLUP)
+    cond1 = (diob4.read_resistance() == 1000.0) and (
+        diob4.read_pdpu() == PinStatus.PULLUP
     )
 
     diob4.mask_pininfo(True)
 
-    cond2 = (
-        (diob4.read_resistance() == 0.0) 
-        and (diob4.read_pdpu() == PinStatus.FLOATING)
+    cond2 = (diob4.read_resistance() == 0.0) and (
+        diob4.read_pdpu() == PinStatus.FLOATING
     )
 
     diob4.mask_pininfo(False)
 
-    cond3 = (
-        (diob4.read_resistance() == 1000.0) 
-        and (diob4.read_pdpu() == PinStatus.PULLUP)
+    cond3 = (diob4.read_resistance() == 1000.0) and (
+        diob4.read_pdpu() == PinStatus.PULLUP
     )
 
-    return (cond1 and cond2 and cond3)
+    return cond1 and cond2 and cond3
+
 
 def test_pin_contention():
     # The Cr50 behavior is to just return the pd/pu that has the least
     # resistance. Although, not sure what actually happens on the silicon
     # when theres a PU on one side and PD on another.
-    
+
     gpio0_1 = PinDevice()
     diob4 = PinDevice()
 
@@ -53,15 +52,16 @@ def test_pin_contention():
 
     diob4.set_pininfo(PinStatus.PULLUP, 1500.0)
     gpio0_1.set_pininfo(PinStatus.PULLDOWN, 1000.0)
-    
+
     return (
-        (gpio0_1.read_resistance() == 1000.0) 
+        (gpio0_1.read_resistance() == 1000.0)
         and (gpio0_1.read_pdpu() == PinStatus.PULLDOWN)
         and (diob4.read_resistance() == 1000.0)
         and (diob4.read_pdpu() == PinStatus.PULLDOWN)
     )
 
-def test_combined_resistance():    
+
+def test_combined_resistance():
     # Following the 1/R + 1/R = 1/combined R rule,
     # 1/15 + 1/10 = 1/6, so our resistance is 6ohms.
     gpio0_1 = PinDevice()
@@ -72,13 +72,14 @@ def test_combined_resistance():
 
     diob4.set_pininfo(PinStatus.PULLUP, 1500.0)
     gpio0_1.set_pininfo(PinStatus.PULLUP, 1000.0)
-    
+
     return (
-        (gpio0_1.read_resistance() == 600.0) 
+        (gpio0_1.read_resistance() == 600.0)
         and (gpio0_1.read_pdpu() == PinStatus.PULLUP)
         and (diob4.read_resistance() == 600.0)
         and (diob4.read_pdpu() == PinStatus.PULLUP)
     )
+
 
 def test_chained_devices():
     # A more advanced version of pin contention which involves a looped chain
@@ -120,6 +121,6 @@ for testname, testfn in TESTS.items():
     result = testfn()
 
     if result:
-        print(f"{testname} {termcolor.colored("passed", "green")}")
+        print(f"{testname} {termcolor.colored('passed', 'green')}")
     else:
-        print(f"{testname} {termcolor.colored("failed", "red")}")
+        print(f"{testname} {termcolor.colored('failed', 'red')}")

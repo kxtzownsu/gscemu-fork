@@ -25,6 +25,7 @@ TIMER_FREQ_HZ = 8 * 32768
 NS_PER_TICK = 1_000_000_000 / TIMER_FREQ_HZ
 TIMER_IRQS = [159, 160]
 
+
 class TimerState:
     """State for a single timer within the TIMELS peripheral."""
 
@@ -49,6 +50,7 @@ class TimerState:
         self.start_time_ns = 0  # perf_counter_ns when timer started
         self.start_value = 0  # VALUE when timer started
         self.running = False
+
 
 class LowSpeedTimer:
     """TIMELS peripheral emulation with two countdown timers.
@@ -110,10 +112,8 @@ class LowSpeedTimer:
                     elapsed_ns = time.monotonic_ns() - timer.start_time_ns
                     elapsed_ticks = int(elapsed_ns / NS_PER_TICK)
 
-                    if (
-                        (elapsed_ticks >= timer.start_value) 
-                        and 
-                        not (timer.status & 1)
+                    if (elapsed_ticks >= timer.start_value) and not (
+                        timer.status & 1
                     ):
                         timer.status |= 1
                         timer.isr |= 1
@@ -163,7 +163,9 @@ class LowSpeedTimer:
 
         return timer.start_value - elapsed_ticks
 
-    def read_timer_control(self, size: int, queue: queue.Queue, index: int) -> None:
+    def read_timer_control(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         with self.timer_lock:
             queue.put(self.timers[index].control)
 
@@ -187,7 +189,9 @@ class LowSpeedTimer:
                 timer.start_value = current_value
                 timer.running = False
 
-    def read_timer_status(self, size: int, queue: queue.Queue, index: int) -> None:
+    def read_timer_status(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         with self.timer_lock:
             queue.put(self.timers[index].status)
 
@@ -200,7 +204,9 @@ class LowSpeedTimer:
     # LOAD Register
     # =========================================================================
 
-    def read_timer_load(self, size: int, queue: queue.Queue, index: int) -> None:
+    def read_timer_load(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         with self.timer_lock:
             queue.put(self.timers[index].load)
 
@@ -217,7 +223,9 @@ class LowSpeedTimer:
             # Signal watchdog in case timer is about to expire
             self.watchdog_check.set()
 
-    def read_timer_reloadval(self, size: int, queue: queue.Queue, index: int) -> None:
+    def read_timer_reloadval(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         with self.timer_lock:
             queue.put(self.timers[index].reloadval)
 
@@ -225,7 +233,9 @@ class LowSpeedTimer:
         with self.timer_lock:
             self.timers[index].reloadval = value
 
-    def read_timer_value(self, size: int, queue: queue.Queue, index: int) -> None:
+    def read_timer_value(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         with self.timer_lock:
             timer = self.timers[index]
             current_value = self._compute_value_internal(timer)
@@ -238,7 +248,9 @@ class LowSpeedTimer:
             if timer.running:
                 timer.start_time_ns = time.monotonic_ns()
 
-    def read_timer_step(self, size: int, queue: queue.Queue, index: int) -> None:
+    def read_timer_step(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         with self.timer_lock:
             queue.put(self.timers[index].step)
 
@@ -289,9 +301,7 @@ class LowSpeedTimer:
         with self.timer_lock:
             queue.put(self.timers[index].wakeup_ack)
 
-    def write_timer_wakeup_ack(
-        self, size: int, value: int, index: int
-    ) -> None:
+    def write_timer_wakeup_ack(self, size: int, value: int, index: int) -> None:
         with self.timer_lock:
             self.timers[index].wakeup_ack = value
 
@@ -314,7 +324,7 @@ class LowSpeedTimer:
     def component_start_timer_debug(self) -> None:
         with self.timer_lock:
             for timer in self.timers:
-                if getattr(timer, '_debug_paused', False):
+                if getattr(timer, "_debug_paused", False):
                     if timer.start_value == 0 and timer.load:
                         timer.start_value = timer.load
                     timer.start_time_ns = time.monotonic_ns()
@@ -322,6 +332,7 @@ class LowSpeedTimer:
                     timer._debug_paused = False
 
         self.watchdog_check.set()
+
 
 def init_LowSpeedTimer(ctx: EmulatorContext, regs: dict):
     c_emu = LowSpeedTimer(ctx)
@@ -331,49 +342,40 @@ def init_LowSpeedTimer(ctx: EmulatorContext, regs: dict):
     # TIMER0 and TIMER1.
     sub_timer_fn_map = {
         regs["TIMER"]["CONTROL"]: [
-            c_emu.read_timer_control, c_emu.write_timer_control
+            c_emu.read_timer_control,
+            c_emu.write_timer_control,
         ],
         regs["TIMER"]["STATUS"]: [
-            c_emu.read_timer_status, c_emu.write_timer_status
+            c_emu.read_timer_status,
+            c_emu.write_timer_status,
         ],
-        regs["TIMER"]["LOAD"]: [
-            c_emu.read_timer_load, c_emu.write_timer_load
-        ],
+        regs["TIMER"]["LOAD"]: [c_emu.read_timer_load, c_emu.write_timer_load],
         regs["TIMER"]["RELOADVAL"]: [
-            c_emu.read_timer_reloadval, c_emu.write_timer_reloadval
+            c_emu.read_timer_reloadval,
+            c_emu.write_timer_reloadval,
         ],
         regs["TIMER"]["VALUE"]: [
-            c_emu.read_timer_value, c_emu.write_timer_value
+            c_emu.read_timer_value,
+            c_emu.write_timer_value,
         ],
-        regs["TIMER"]["STEP"]: [
-            c_emu.read_timer_step, c_emu.write_timer_step
-        ],
-        regs["TIMER"]["IER"]: [
-            c_emu.read_timer_ier, c_emu.write_timer_ier
-        ],
-        regs["TIMER"]["ISR"]: [
-            c_emu.read_timer_isr, c_emu.write_timer_isr
-        ],
-        regs["TIMER"]["IPR"]: [
-            c_emu.read_timer_ipr, c_emu.write_timer_ipr
-        ],
-        regs["TIMER"]["IAR"]: [
-            c_emu.read_timer_iar, c_emu.write_timer_iar
-        ],
+        regs["TIMER"]["STEP"]: [c_emu.read_timer_step, c_emu.write_timer_step],
+        regs["TIMER"]["IER"]: [c_emu.read_timer_ier, c_emu.write_timer_ier],
+        regs["TIMER"]["ISR"]: [c_emu.read_timer_isr, c_emu.write_timer_isr],
+        regs["TIMER"]["IPR"]: [c_emu.read_timer_ipr, c_emu.write_timer_ipr],
+        regs["TIMER"]["IAR"]: [c_emu.read_timer_iar, c_emu.write_timer_iar],
         regs["TIMER"]["WAKEUP_ACK"]: [
-            c_emu.read_timer_wakeup_ack, c_emu.write_timer_wakeup_ack
-        ],  
+            c_emu.read_timer_wakeup_ack,
+            c_emu.write_timer_wakeup_ack,
+        ],
     }
 
     reg_fn_map = {}
 
     for timer_idx in range(2):
         for offset, fn_map in sub_timer_fn_map.items():
-            reg_fn_map[regs[
-                f"TIMER{timer_idx}_BASE"
-            ] + offset] = [
+            reg_fn_map[regs[f"TIMER{timer_idx}_BASE"] + offset] = [
                 args_lambda_gen(fn_map[0], timer_idx),
-                args_lambda_gen(fn_map[1], timer_idx)
+                args_lambda_gen(fn_map[1], timer_idx),
             ]
 
     def component_read_handler(
@@ -403,6 +405,7 @@ def init_LowSpeedTimer(ctx: EmulatorContext, regs: dict):
         c_emu, component_read_handler, component_write_handler
     )
 
+
 def component_stop_timer_debug(c_emu: LowSpeedTimer) -> None:
     with c_emu.timer_lock:
         for timer in c_emu.timers:
@@ -420,7 +423,7 @@ def component_stop_timer_debug(c_emu: LowSpeedTimer) -> None:
 def component_start_timer_debug(c_emu: LowSpeedTimer) -> None:
     with c_emu.timer_lock:
         for timer in c_emu.timers:
-            if getattr(timer, '_debug_paused', False):
+            if getattr(timer, "_debug_paused", False):
                 if timer.start_value == 0 and timer.load:
                     timer.start_value = timer.load
                 timer.start_time_ns = time.monotonic_ns()

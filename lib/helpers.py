@@ -13,40 +13,35 @@ from lib.logger import GscemuLogger
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
+
 def unhandled_register_exit(
-    ctx: EmulatorContext,
-    logger: GscemuLogger, 
-    component: str, 
-    address: int
+    ctx: EmulatorContext, logger: GscemuLogger, component: str, address: int
 ) -> None:
     logger.fatal(
-        f"Unhandled register 0x{address:x} in component {component} at " +
-        f"pc=0x{ctx.uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
+        f"Unhandled register 0x{address:x} in component {component} at "
+        + f"pc=0x{ctx.uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
     )
     halt_emulation(ctx.uc, ctx.ucthread)
 
+
 def unhandled_register_io(
-    logger: GscemuLogger, 
-    io_type: str, 
-    component: str, 
-    subcomponent: str
+    logger: GscemuLogger, io_type: str, component: str, subcomponent: str
 ) -> None:
     logger.warning(f"Unhandled {io_type} to {component}, {subcomponent}!")
 
-def args_lambda_gen(
-    reg_fn: typing.Callable, *fixed_args
-) -> typing.Callable:
+
+def args_lambda_gen(reg_fn: typing.Callable, *fixed_args) -> typing.Callable:
     """Returns a lambda object to handle fixed argument values for a function.
 
     We can infer the number of changing arguments from the number of fixed
     arguments passed to us and the number of arguments that reg_fn expects.
     With this, we assume all fixed arguments are at the front, and changing
-    arguments at the back in order. 
-    
-    This is a powerful macro to remove expanding (*args, **kwargs) every 
-    function call, although very costly at the start which takes up a lot of 
+    arguments at the back in order.
+
+    This is a powerful macro to remove expanding (*args, **kwargs) every
+    function call, although very costly at the start which takes up a lot of
     setup time.
-    
+
     Example:
         reg_fn(x, y, z)
         args_lambda_gen(reg_fn, 10) -> lambda x, y: reg_fn(x, y, 10)
@@ -56,7 +51,7 @@ def args_lambda_gen(
     is_class = int(inspect.ismethod(reg_fn))
 
     num_changing_args = reg_fn.__code__.co_argcount - is_class - len(fixed_args)
-    
+
     argenv = {}
     argenv["reg_fn"] = reg_fn
 
@@ -76,10 +71,11 @@ def args_lambda_gen(
         argenv[f"b{argnum}"] = argval
 
     return eval(
-        f"lambda {changing_argstring}: " + 
-        f"reg_fn({changing_argstring}{fixed_argstring})",
-        argenv
+        f"lambda {changing_argstring}: "
+        + f"reg_fn({changing_argstring}{fixed_argstring})",
+        argenv,
     )
+
 
 def idx_regs_to_regmap(
     regmap: list,
@@ -90,42 +86,37 @@ def idx_regs_to_regmap(
     for idx, offset in enumerate(reglist):
         regmap[offset] = [
             args_lambda_gen(read_fn, idx),
-            args_lambda_gen(write_fn, idx)
+            args_lambda_gen(write_fn, idx),
         ]
 
-def armv7m_find_instruction_size(
-    ucmutex: UcMutex, 
-    address: int
-):
+
+def armv7m_find_instruction_size(ucmutex: UcMutex, address: int):
     """Find the instruction length of an instruction from it's address.
-    
-    Based on the armv7m Cortex-M3 spec, we are using Thumb-2. Therefore, 
+
+    Based on the armv7m Cortex-M3 spec, we are using Thumb-2. Therefore,
     we can determine a 2 or 4 byte instruction by looking at the first 2 bytes
     of an instruction. If bytes [15:11] are more than 0x1d, it's a 4 byte
     instruction.
     """
-    if ((ucmutex.int16_mem_read(address) >> 11) & 0x1f) >= 0x1d:
+    if ((ucmutex.int16_mem_read(address) >> 11) & 0x1F) >= 0x1D:
         return 4
     else:
         return 2
 
-def write_u32_to_sp(
-    ucmutex: UcMutex, 
-    val: int
-):
+
+def write_u32_to_sp(ucmutex: UcMutex, val: int):
     new_sp = ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_SP) - 4
     ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_SP, new_sp)
 
-    ucmutex.mem_write(new_sp, val.to_bytes(4, 'little'))
+    ucmutex.mem_write(new_sp, val.to_bytes(4, "little"))
 
-def read_u32_from_sp(
-    ucmutex: UcMutex, 
-    sp_type: int
-):
+
+def read_u32_from_sp(ucmutex: UcMutex, sp_type: int):
     sp = ucmutex.reg_read(sp_type)
     val = ucmutex.int32_mem_read(sp)
     ucmutex.reg_write(sp_type, sp + 4)
     return val
+
 
 def pattern_list_gen(starting_offset, indexes, step=4):
     temp = []
@@ -134,6 +125,7 @@ def pattern_list_gen(starting_offset, indexes, step=4):
 
     return temp
 
+
 def halt_emulation(
     uc: qemu.Uc,
     ucthread: UcThread,
@@ -141,10 +133,11 @@ def halt_emulation(
     # PC sync is not guaranteed here, so the caller needs to manage this
     # properly if we use this.
     prints.debug(
-        "Emulation forcefully halted at " +
-        f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
+        "Emulation forcefully halted at "
+        + f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
     )
     ucthread.emu_halt()
+
 
 def extract_max_number(v, current_max=None):
     """

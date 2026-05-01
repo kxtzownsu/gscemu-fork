@@ -9,10 +9,10 @@ from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
 from lib.helpers import (
-    unhandled_register_io, 
+    unhandled_register_io,
     unhandled_register_exit,
     idx_regs_to_regmap,
-    args_lambda_gen
+    args_lambda_gen,
 )
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
@@ -22,9 +22,10 @@ PERMISSION_MEDIUM = 0x33
 PERMISSION_HIGH = 0x3C
 PERMISSION_HIGHEST = 0x55
 _EXPECTED_SB_BL_SIG = [
-    0xe303ec7a, 0x68a03a27, 0xdd18053e, 0x39f8dbbd, 
+    0xe303ec7a, 0x68a03a27, 0xdd18053e, 0x39f8dbbd,
     0x9b553578, 0xb4598244, 0xc59f62d1, 0x61b8509e
 ]
+
 
 class HavenGlobalsec:
     def __init__(self, ctx: EmulatorContext, regs: dict):
@@ -32,7 +33,7 @@ class HavenGlobalsec:
         self.mutex = FifoLock()
 
         # HIDE_ROM doesn't do anything as far as we know, so don't do anything.
-        self.hide_rom = 0 
+        self.hide_rom = 0
 
         self.dbg_control = 0
         self.dummykey = [0] * 3
@@ -108,7 +109,8 @@ class HavenGlobalsec:
                 "EN": [0] * 2,
                 "SHUTDOWN_EN": 0,
                 "CLEAR": 0,
-            } for _ in range(3)
+            }
+            for _ in range(3)
         ]
 
         self.alert_group = [
@@ -116,7 +118,8 @@ class HavenGlobalsec:
                 "EN": [0] * 2,
                 "CTR": 0,
                 "THRESHOLD": 0,
-            } for _ in range(3)
+            }
+            for _ in range(3)
         ]
 
     def read_alert_cfg_lock(self, size: int) -> None:
@@ -147,9 +150,7 @@ class HavenGlobalsec:
         with self.mutex:
             return self.alert_intr_sts[index]
 
-    def write_alert_intr_sts(
-            self, size: int, value: int, index: int
-        ) -> None:
+    def write_alert_intr_sts(self, size: int, value: int, index: int) -> None:
         with self.mutex:
             self.alert_intr_sts[index] = value
 
@@ -157,9 +158,7 @@ class HavenGlobalsec:
         with self.mutex:
             return self.alert_nmi_en[index]
 
-    def write_alert_nmi_en(
-            self, size: int, value: int, index: int
-        ) -> None:
+    def write_alert_nmi_en(self, size: int, value: int, index: int) -> None:
         with self.mutex:
             self.alert_nmi_en[index] = value
 
@@ -168,30 +167,28 @@ class HavenGlobalsec:
             return self.alert_dlyctr[index]["BASE"]
 
     def write_alert_dlyctr_base(
-            self, size: int, value: int, index: int
-        ) -> None:
+        self, size: int, value: int, index: int
+    ) -> None:
         with self.mutex:
             self.alert_dlyctr[index]["BASE"] = value
 
-    def read_alert_dlyctr_len(
-            self, size: int, index: int
-        ) -> None:
+    def read_alert_dlyctr_len(self, size: int, index: int) -> None:
         with self.mutex:
             return self.alert_dlyctr[index]["LEN"]
 
-    def write_alert_dlyctr_len(
-            self, size: int, value: int, index: int
-        ) -> None:
+    def write_alert_dlyctr_len(self, size: int, value: int, index: int) -> None:
         with self.mutex:
             self.alert_dlyctr[index]["LEN"] = value
 
-    def read_alert_dlyctr_en(self, size: int, index: int, en_index: int) -> None:
+    def read_alert_dlyctr_en(
+        self, size: int, index: int, en_index: int
+    ) -> None:
         with self.mutex:
             return self.alert_dlyctr[index]["EN"][en_index]
 
     def write_alert_dlyctr_en(
-            self, size: int, value: int, index: int, en_index: int
-        ) -> None:
+        self, size: int, value: int, index: int, en_index: int
+    ) -> None:
         with self.mutex:
             self.alert_dlyctr[index]["EN"][en_index] = value
 
@@ -200,8 +197,8 @@ class HavenGlobalsec:
             return self.alert_dlyctr[index]["SHUTDOWN_EN"]
 
     def write_alert_dlyctr_shutdown_en(
-            self, size: int, value: int, index: int
-        ) -> None:
+        self, size: int, value: int, index: int
+    ) -> None:
         with self.mutex:
             self.alert_dlyctr[index]["SHUTDOWN_EN"] = value
 
@@ -210,8 +207,8 @@ class HavenGlobalsec:
             return self.alert_dlyctr[index]["CLEAR"]
 
     def write_alert_dlyctr_clear(
-            self, size: int, value: int, index: int
-        ) -> None:
+        self, size: int, value: int, index: int
+    ) -> None:
         with self.mutex:
             self.alert_dlyctr[index]["CLEAR"] = value
 
@@ -220,8 +217,8 @@ class HavenGlobalsec:
             return self.alert_group[index]["EN"][en_index]
 
     def write_alert_group_en(
-            self, size: int, value: int, index: int, en_index: int
-        ) -> None:
+        self, size: int, value: int, index: int, en_index: int
+    ) -> None:
         with self.mutex:
             self.alert_group[index]["EN"][en_index] = value
 
@@ -238,8 +235,8 @@ class HavenGlobalsec:
             return self.alert_group[index]["THRESHOLD"]
 
     def write_alert_group_threshold(
-            self, size: int, value: int, index: int
-        ) -> None:
+        self, size: int, value: int, index: int
+    ) -> None:
         with self.mutex:
             self.alert_group[index]["THRESHOLD"] = value
 
@@ -265,11 +262,11 @@ class HavenGlobalsec:
             return self.permission_runlevel[reg_offset]
 
     def write_permission_runlevel(
-            self, size: int, value: int, reg_offset: int
-        ) -> None:
+        self, size: int, value: int, reg_offset: int
+    ) -> None:
         with self.mutex:
             self.decrement_permission_runlevel(reg_offset)
-        
+
     def read_dummykey(self, size: int, index: int) -> None:
         with self.mutex:
             return self.dummykey[index]
@@ -296,7 +293,7 @@ class HavenGlobalsec:
     def read_sb_bl_sig(self, size: int, index: int) -> None:
         # We know that on a Cr50, reading from SB_BL_SIG returns a 0xfacecafe
         with self.mutex:
-            return 0xfacecafe
+            return 0xFACECAFE
 
     def write_sb_bl_sig(self, size: int, value: int, index: int) -> None:
         with self.mutex:
@@ -346,11 +343,7 @@ class HavenGlobalsec:
         unhandled_register_io(prints, "WRITE", "GLOBALSEC", "OBFS_SW_EN")
 
     def read_region_register(
-        self,
-        size: int, 
-        reg_type: str, 
-        bus_master: str, 
-        index: int
+        self, size: int, reg_type: str, bus_master: str, index: int
     ) -> None:
         with self.mutex:
             if reg_type == "ctrl":
@@ -364,12 +357,7 @@ class HavenGlobalsec:
             return value
 
     def write_region_register(
-        self,
-        size: int,
-        value: int, 
-        reg_type: str, 
-        bus_master: str, 
-        index: int
+        self, size: int, value: int, reg_type: str, bus_master: str, index: int
     ) -> None:
         with self.mutex:
             if reg_type == "ctrl":
@@ -381,39 +369,39 @@ class HavenGlobalsec:
             elif reg_type == "size":
                 self.region_size[bus_master][index] = value
 
+
 def init_HavenGlobalsec(ctx: EmulatorContext, regs: dict):
     c_emu = HavenGlobalsec(ctx, regs)
 
     reg_fn_map = {
         regs["DBG_CONTROL"]: [
-            c_emu.read_dbg_control, c_emu.write_dbg_control,
+            c_emu.read_dbg_control,
+            c_emu.write_dbg_control,
         ],
         regs["ALERT"]["CFG_LOCK"]: [
-            c_emu.read_alert_cfg_lock, c_emu.write_alert_cfg_lock
+            c_emu.read_alert_cfg_lock,
+            c_emu.write_alert_cfg_lock,
         ],
         regs["ALERT"]["FW_TRIGGER"]: [
-            c_emu.read_alert_fw_trigger, c_emu.write_alert_fw_trigger
+            c_emu.read_alert_fw_trigger,
+            c_emu.write_alert_fw_trigger,
         ],
         regs["ALERT"]["CONTROL"]: [
-            c_emu.read_alert_control, c_emu.write_alert_control
+            c_emu.read_alert_control,
+            c_emu.write_alert_control,
         ],
-        regs["HIDE_ROM"]: [
-            c_emu.read_hide_rom, c_emu.write_hide_rom
-        ],
-        regs["SIG_UNLOCK"]: [
-            c_emu.read_sig_unlock, c_emu.write_sig_unlock
-        ],
+        regs["HIDE_ROM"]: [c_emu.read_hide_rom, c_emu.write_hide_rom],
+        regs["SIG_UNLOCK"]: [c_emu.read_sig_unlock, c_emu.write_sig_unlock],
         regs["SB_COMP_STATUS"]: [
-            c_emu.read_sb_comp_status, c_emu.write_sb_comp_status
+            c_emu.read_sb_comp_status,
+            c_emu.write_sb_comp_status,
         ],
-        regs["OBFS_SW_EN"]: [
-            c_emu.read_obfs_sw_en, c_emu.write_obfs_sw_en
-        ],
+        regs["OBFS_SW_EN"]: [c_emu.read_obfs_sw_en, c_emu.write_obfs_sw_en],
     }
 
     # GLOBALSEC has many registers that repeat. We should dynamically add the
-    # register handlers, not manually add them to the function map. This 
-    # improves code readability and maintainability. We only sacrifice setup 
+    # register handlers, not manually add them to the function map. This
+    # improves code readability and maintainability. We only sacrifice setup
     # runtime, not emulator runtime. Setup runtime is mostly negligible.
     for reg_type in ["CTRL", "CTRL_CFG_EN", "BASE_ADDR", "SIZE"]:
         reg_type_lower = reg_type.lower()
@@ -424,93 +412,88 @@ def init_HavenGlobalsec(ctx: EmulatorContext, regs: dict):
                         c_emu.read_region_register,
                         reg_type_lower,
                         bus_master,
-                        idx
+                        idx,
                     ),
                     args_lambda_gen(
                         c_emu.write_region_register,
                         reg_type_lower,
                         bus_master,
-                        idx
-                    )
+                        idx,
+                    ),
                 ]
 
     idx_regs_to_regmap(
-        reg_fn_map, regs["ALERT"]["INTR_STS"],
-        c_emu.read_alert_intr_sts, c_emu.write_alert_intr_sts
+        reg_fn_map,
+        regs["ALERT"]["INTR_STS"],
+        c_emu.read_alert_intr_sts,
+        c_emu.write_alert_intr_sts,
     )
 
     idx_regs_to_regmap(
-        reg_fn_map, regs["ALERT"]["NMI_EN"],
-        c_emu.read_alert_nmi_en, c_emu.write_alert_nmi_en
+        reg_fn_map,
+        regs["ALERT"]["NMI_EN"],
+        c_emu.read_alert_nmi_en,
+        c_emu.write_alert_nmi_en,
     )
 
     for idx, dlyctr in enumerate(regs["ALERT"]["DLYCTR"]):
         reg_fn_map[dlyctr["BASE"]] = [
             args_lambda_gen(c_emu.read_alert_dlyctr_base, idx),
-            args_lambda_gen(c_emu.write_alert_dlyctr_base, idx)
+            args_lambda_gen(c_emu.write_alert_dlyctr_base, idx),
         ]
         reg_fn_map[dlyctr["LEN"]] = [
             args_lambda_gen(c_emu.read_alert_dlyctr_len, idx),
-            args_lambda_gen(c_emu.write_alert_dlyctr_len, idx)
+            args_lambda_gen(c_emu.write_alert_dlyctr_len, idx),
         ]
         for en_idx, en_offset in enumerate(dlyctr["EN"]):
             reg_fn_map[en_offset] = [
-                args_lambda_gen(
-                    c_emu.read_alert_dlyctr_en, idx, en_idx
-                ),
-                args_lambda_gen(
-                    c_emu.write_alert_dlyctr_en, idx, en_idx
-                )
+                args_lambda_gen(c_emu.read_alert_dlyctr_en, idx, en_idx),
+                args_lambda_gen(c_emu.write_alert_dlyctr_en, idx, en_idx),
             ]
         reg_fn_map[dlyctr["SHUTDOWN_EN"]] = [
             args_lambda_gen(c_emu.read_alert_dlyctr_shutdown_en, idx),
-            args_lambda_gen(c_emu.write_alert_dlyctr_shutdown_en, idx)
+            args_lambda_gen(c_emu.write_alert_dlyctr_shutdown_en, idx),
         ]
         reg_fn_map[dlyctr["CLEAR"]] = [
             args_lambda_gen(c_emu.read_alert_dlyctr_clear, idx),
-            args_lambda_gen(c_emu.write_alert_dlyctr_clear, idx)
+            args_lambda_gen(c_emu.write_alert_dlyctr_clear, idx),
         ]
 
     for idx, group in enumerate(regs["ALERT"]["GROUP"]):
         for en_idx, en_offset in enumerate(group["EN"]):
             reg_fn_map[en_offset] = [
-                args_lambda_gen(
-                    c_emu.read_alert_group_en, idx, en_idx
-                ),
-                args_lambda_gen(
-                    c_emu.read_alert_group_en, idx, en_idx
-                ),
+                args_lambda_gen(c_emu.read_alert_group_en, idx, en_idx),
+                args_lambda_gen(c_emu.read_alert_group_en, idx, en_idx),
             ]
         reg_fn_map[group["CTR"]] = [
             args_lambda_gen(c_emu.read_alert_group_ctr, idx),
-            args_lambda_gen(c_emu.write_alert_group_ctr, idx)
+            args_lambda_gen(c_emu.write_alert_group_ctr, idx),
         ]
         reg_fn_map[group["THRESHOLD"]] = [
             args_lambda_gen(c_emu.read_alert_group_threshold, idx),
-            args_lambda_gen(c_emu.write_alert_group_threshold, idx)
+            args_lambda_gen(c_emu.write_alert_group_threshold, idx),
         ]
 
     idx_regs_to_regmap(
-        reg_fn_map, regs["DUMMYKEY"],
-        c_emu.read_dummykey, c_emu.write_dummykey
+        reg_fn_map, regs["DUMMYKEY"], c_emu.read_dummykey, c_emu.write_dummykey
     )
 
     idx_regs_to_regmap(
-        reg_fn_map, regs["SB_BL_SIG"],
-        c_emu.read_sb_bl_sig, c_emu.write_sb_bl_sig
+        reg_fn_map,
+        regs["SB_BL_SIG"],
+        c_emu.read_sb_bl_sig,
+        c_emu.write_sb_bl_sig,
     )
 
     for perm in [
-        "CPU0_S_PERMISSION", "CPU0_S_DAP_PERMISSION", 
-        "DDMA0_PERMISSION", "SOFTWARE_LVL"
+        "CPU0_S_PERMISSION",
+        "CPU0_S_DAP_PERMISSION",
+        "DDMA0_PERMISSION",
+        "SOFTWARE_LVL",
     ]:
         reg_fn_map[regs[perm]] = [
-            args_lambda_gen(
-                c_emu.read_permission_runlevel, regs[perm]
-            ),
-            args_lambda_gen(
-                c_emu.write_permission_runlevel, regs[perm]
-            ),
+            args_lambda_gen(c_emu.read_permission_runlevel, regs[perm]),
+            args_lambda_gen(c_emu.write_permission_runlevel, regs[perm]),
         ]
 
     def component_read_handler(

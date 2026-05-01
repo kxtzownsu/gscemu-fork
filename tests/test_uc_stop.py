@@ -14,7 +14,8 @@ emulator plans to execute, but the instruction is not actually executed yet.
 import unicorn as emu
 import threading
 import time
-with open('/Users/appleflyer/titanm/arm-code-assembler/code.bin', 'rb') as f:
+
+with open("/Users/appleflyer/titanm/arm-code-assembler/code.bin", "rb") as f:
     code = f.read()
 
 # assembly used:
@@ -34,7 +35,9 @@ with open('/Users/appleflyer/titanm/arm-code-assembler/code.bin', 'rb') as f:
 #     mov r10, r0
 #     b 1b
 
-uc = emu.Uc(emu.UC_ARCH_ARM, emu.UC_MODE_THUMB, emu.arm_const.UC_CPU_ARM_CORTEX_M3)
+uc = emu.Uc(
+    emu.UC_ARCH_ARM, emu.UC_MODE_THUMB, emu.arm_const.UC_CPU_ARM_CORTEX_M3
+)
 uc.mem_map(0x0, 0x1000)
 uc.mem_write(0x0, code)
 
@@ -52,8 +55,8 @@ regs = [
     emu.arm_const.UC_ARM_REG_R8,
     emu.arm_const.UC_ARM_REG_R9,
     emu.arm_const.UC_ARM_REG_R10,
-
 ]
+
 
 def wait_thread():
     global uc
@@ -64,7 +67,7 @@ def wait_thread():
     for reg in regs:
         print(uc.reg_read(reg))
     print(uc.reg_read(emu.arm_const.UC_ARM_REG_PC))
-    
+
     stage2.set()
 
     time.sleep(0.001)
@@ -76,12 +79,13 @@ def wait_thread():
 
     return
 
+
 thread_stop = threading.Thread(target=wait_thread)
 thread_stop.start()
 
-uc.emu_start(0x0|1, 0xFFFFFFFF)
+uc.emu_start(0x0 | 1, 0xFFFFFFFF)
 stage2.wait()
-uc.emu_start(uc.reg_read(emu.arm_const.UC_ARM_REG_PC)|1, 0xFFFFFFFF)
+uc.emu_start(uc.reg_read(emu.arm_const.UC_ARM_REG_PC) | 1, 0xFFFFFFFF)
 
 # output
 

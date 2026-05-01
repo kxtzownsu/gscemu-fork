@@ -5,17 +5,19 @@ import typing
 import unicorn as qemu
 import queue
 import threading
-import sys
 
 from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
 from lib.helpers import (
-    unhandled_register_exit, unhandled_register_io, extract_max_number
+    unhandled_register_exit,
+    unhandled_register_io,
+    extract_max_number,
 )
 from .m3 import pend_external_irq, unpend_external_irq
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
+
 
 class UartController:
     def __init__(self, ctx: EmulatorContext):
@@ -32,7 +34,7 @@ class UartController:
         self.char_out_callback_userdata = None
 
         # TX cannot be ready until CTRL is set. CTRL is 0 by default.
-        self.state = 1 # BIT(0)
+        self.state = 1  # BIT(0)
 
         self.ctrl = 0
         self.nco = 0
@@ -47,13 +49,13 @@ class UartController:
 
                 # update STATE based on input queue
                 if self.input_queue.empty():
-                    self.state |= 128 # BIT(7), True
+                    self.state |= 128  # BIT(7), True
                 else:
-                    self.state &= ~128 # BIT(7), False
+                    self.state &= ~128  # BIT(7), False
                     pend_external_irq(self.ctx.c_fast.m3, 174)
 
                 if target_fn:
-                    target_fn(*args) # Splat the arguments into the target_fn
+                    target_fn(*args)  # Splat the arguments into the target_fn
 
                 # For write operations, this doesn't do anything. For read
                 # operations, we need to tell the handler that we have processed
@@ -74,7 +76,7 @@ class UartController:
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
-        
+
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
@@ -92,46 +94,46 @@ class UartController:
     def ctrl_process(self):
         # UART_CTRL_TX
         # 0 = disabled, 1 = enabled
-        if self.ctrl & 1: # BIT(0)
+        if self.ctrl & 1:  # BIT(0)
             # UART_STATE_TX
             # 0 = enabled, 1 = busy
-            self.state &= ~1 # BIT(0)
+            self.state &= ~1  # BIT(0)
 
             # UART_STATE_TX_EMPTY
             # 0 = not empty, 1 = empty
-            self.state |= 16 # BIT(4)
+            self.state |= 16  # BIT(4)
 
             # UART_STATE_TX_IDLE
             # 0 = not idle, 1 = idle
-            self.state |= 32 # BIT(5)
+            self.state |= 32  # BIT(5)
 
         # UART_CTRL_RX
         # 0 = disabled, 1 = enabled
-        if self.ctrl & 2: # BIT(1)
+        if self.ctrl & 2:  # BIT(1)
             # UART_STATE_RX
             # 0 = enabled, 1 = busy
-            self.state &= ~2 # BIT(1)
+            self.state &= ~2  # BIT(1)
 
             # UART_STATE_RX_EMPTY
             # 0 = not empty, 1 = empty
-            self.state |= 128 # BIT(7)
+            self.state |= 128  # BIT(7)
 
             # UART_STATE_RX_IDLE
             # 0 = not idle, 1 = idle
-            self.state |= 64 # BIT(6)
+            self.state |= 64  # BIT(6)
 
     def read_wdata(self, size: int, queue: queue.Queue) -> None:
         unhandled_register_io(prints, "READ", "UART0", "WDATA")
         queue.put(0)
 
     def write_wdata(self, size: int, value: int) -> None:
-        if not (self.state & 1): # BIT(0)
+        if not (self.state & 1):  # BIT(0)
             self.char_out_callback(value, self.char_out_callback_userdata)
         else:
             prints.warning("WDATA written to whilst STATE_TX set!")
 
     def read_rdata(self, size: int, queue: queue.Queue) -> None:
-        if not (self.state & 2): # BIT(1)
+        if not (self.state & 2):  # BIT(1)
             try:
                 char = self.input_queue.get_nowait()
             except queue.Empty:
@@ -165,7 +167,7 @@ class UartController:
 
     def write_state(self, size: int, value: int) -> None:
         self.state = value
-        
+
     def read_fifo(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.fifo)
 
@@ -191,6 +193,7 @@ class UartController:
             # RX_INT
             unpend_external_irq(self.ctx.c_fast.m3, 174)
 
+
 def init_UartController(ctx: EmulatorContext, regs: dict):
     c_emu = UartController(ctx)
     c_emu.start_worker()
@@ -205,7 +208,8 @@ def init_UartController(ctx: EmulatorContext, regs: dict):
     reg_fn_map[regs["FIFO"]] = [c_emu.read_fifo, c_emu.write_fifo]
     reg_fn_map[regs["ICTRL"]] = [c_emu.read_ictrl, c_emu.write_ictrl]
     reg_fn_map[regs["ISTATECLR"]] = [
-        c_emu.read_istateclr, c_emu.write_istateclr
+        c_emu.read_istateclr,
+        c_emu.write_istateclr,
     ]
 
     def component_read_handler(
@@ -235,8 +239,10 @@ def init_UartController(ctx: EmulatorContext, regs: dict):
         c_emu, component_read_handler, component_write_handler
     )
 
+
 def cr50_uart_input(c_emu: UartController, unicode_char_code: int) -> None:
     c_emu.queued_uart_input(unicode_char_code)
+
 
 def cr50_uart_output_callback(c_emu: UartController, fn, user_data) -> None:
     c_emu.queued_uart_out_callback(fn, user_data)

@@ -4,7 +4,6 @@
 
 import typing
 import unicorn as qemu
-import queue
 
 from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
@@ -14,6 +13,7 @@ from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
+
 class ComponentXX:
     def __init__(self):
         self.opmutex = FifoLock()
@@ -22,17 +22,16 @@ class ComponentXX:
     def read_xy(self, size: int):
         with self.opmutex:
             return self.xy
-    
+
     def write_xy(self, size: int, value: int):
         with self.opmutex:
             self.xy = value
 
+
 def init_ComponentXX(ctx: EmulatorContext, regs: dict):
     c_emu = ComponentXX()
 
-    reg_fn_map = {
-        regs["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]
-    }
+    reg_fn_map = {regs["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]}
 
     def component_read_handler(
         uc: qemu.Uc,

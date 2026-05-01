@@ -14,6 +14,7 @@ from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
+
 class ComponentXX:
     def __init__(self):
         self.opthread = None
@@ -45,15 +46,16 @@ class ComponentXX:
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
-        
+
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
     def read_xy(self, size: int, queue: queue.Queue):
         queue.put(self.xy)
-    
+
     def write_xy(self, size: int, value: int):
         self.xy = value
+
 
 def init_ComponentXX(ctx: EmulatorContext, regs: dict):
     c_emu = ComponentXX()

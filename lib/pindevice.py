@@ -11,50 +11,57 @@ from lib.threadutils import FifoLock
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
+
 def _normalize_resistance(resistance_ohms: float) -> float:
     # pd/pu without resistance? Just normalize it to 50k for now.
     if resistance_ohms <= 0:
         prints.warning("_normalize_resistance 50k triggered, invalid val!")
         return 50000.0
-    
+
     return resistance_ohms
+
 
 def _parallel_ohms(res_list: list[float]) -> float:
     # Follow the 1/R law to calculate resistance in parallel.
     inv = 0.0
     for r in res_list:
         inv += 1.0 / r
-    
+
     if inv:
         # Round to 2dp, we don't need to be that accurate anyways.
         return round(1.0 / inv, 2)
     else:
         return 0.0
 
+
 class PinStatus(enum.Enum):
     PULLDOWN = enum.auto()
     FLOATING = enum.auto()
     PULLUP = enum.auto()
 
+
 class PinInfo:
-    def __init__(self, pinstate = PinStatus.FLOATING, resistance_ohms = 0.0):
+    def __init__(self, pinstate=PinStatus.FLOATING, resistance_ohms=0.0):
         self.pinstate: PinStatus = pinstate
         self.resistance_ohms: float = resistance_ohms
 
+
 EMPTY_PININFO = PinInfo()
+
 
 class PinDevice:
     """
     This class is used to make pinmux devices, such as for GPIO pins,
     PINMUX pads, SPS connections, etc.
     """
+
     def __init__(
-            self, 
-            interrupt_fn: typing.Callable[
-                [PinStatus, PinStatus, typing.Any]
-            , None] = None, 
-            interrupt_fn_userdata: typing.Any | None = None
-        ):
+        self,
+        interrupt_fn: typing.Callable[
+            [PinStatus, PinStatus, typing.Any], None
+        ] = None,
+        interrupt_fn_userdata: typing.Any | None = None,
+    ):
         self.lock = FifoLock()
 
         # The devices that are driving this pin. On the software side, a pin
@@ -71,7 +78,7 @@ class PinDevice:
 
         self.combined_device_pininfo: PinInfo = PinInfo()
 
-        # Factor in the device_pininfo PinInfo from the component driving us 
+        # Factor in the device_pininfo PinInfo from the component driving us
         # too.
         self.balanced_pininfo: PinInfo = PinInfo()
 
@@ -101,7 +108,7 @@ class PinDevice:
                 )
 
         self.balanced_pininfo.resistance_ohms = float(resistance)
-    
+
     def _update_combined_device_pininfo(
         self, new_pinstate: PinStatus, resistance: float | int
     ):
@@ -176,28 +183,20 @@ class PinDevice:
 
         for info in pininfos:
             if info.pinstate == PinStatus.PULLUP:
-                pullups.append(
-                    _normalize_resistance(info.resistance_ohms)
-                )
+                pullups.append(_normalize_resistance(info.resistance_ohms))
             elif info.pinstate == PinStatus.PULLDOWN:
-                pulldowns.append(
-                    _normalize_resistance(info.resistance_ohms)
-                )
+                pulldowns.append(_normalize_resistance(info.resistance_ohms))
 
         if not pullups and not pulldowns:
             update_fn(PinStatus.FLOATING, 0.0)
             return
 
         if pullups and not pulldowns:
-            update_fn(
-                PinStatus.PULLUP, _parallel_ohms(pullups)
-            )
+            update_fn(PinStatus.PULLUP, _parallel_ohms(pullups))
             return
 
         if pulldowns and not pullups:
-            update_fn(
-                PinStatus.PULLDOWN, _parallel_ohms(pulldowns)
-            )
+            update_fn(PinStatus.PULLDOWN, _parallel_ohms(pulldowns))
             return
 
         ru = _parallel_ohms(pullups)
@@ -245,11 +244,11 @@ class PinDevice:
     def read_pdpu(self) -> PinStatus:
         with self.lock:
             return self.balanced_pininfo.pinstate
-    
+
     def read_resistance(self) -> float:
         with self.lock:
             return self.balanced_pininfo.resistance_ohms
-        
+
     def pininfo_sync_device_pininfo(self):
         with self.lock:
             pininfos = []

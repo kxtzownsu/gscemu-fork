@@ -14,7 +14,7 @@ PINMUX_SEL_REGS = {
     "DIOB_SEL": reg_list(0xa0, 8, 8),
     "RESETB_SEL": 0xe0,
     "VIO_SEL": reg_list(0xe8, 2, 8),
-    
+
     # These only have CTL components, as the "SEL" is controlled by the
     # component itself.
     "GPIO0_SEL": reg_list(0xf8, 16),

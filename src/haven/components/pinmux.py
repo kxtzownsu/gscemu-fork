@@ -17,9 +17,9 @@ from lib.pindevice import PinDevice, PinStatus
 from lib.logger import GscemuLogger
 from .regdefs.pinmux_registers import *
 from lib.helpers import unhandled_register_exit, idx_regs_to_regmap
-from lib.threadutils import FifoLock
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
+
 
 class Cr50Pinmux:
     def __init__(self, ctx: EmulatorContext):
@@ -56,8 +56,8 @@ class Cr50Pinmux:
         for register in ["GPIO0", "GPIO1"]:
             if register not in ctx.components:
                 prints.fatal(
-                    "PINMUX failed to initialize! " + 
-                    "GPIO not initialized properly."
+                    "PINMUX failed to initialize! "
+                    + "GPIO not initialized properly."
                 )
 
         self.gpio0: list[PinDevice] = ctx.components["GPIO0"].object.pindevices
@@ -88,7 +88,7 @@ class Cr50Pinmux:
 
         if idx < 31:
             return self.vio[idx - 29]
-        
+
         return None
 
     def _convert_pinmux_sel_reg_idx_to_pindevice(self, idx: int):
@@ -136,14 +136,14 @@ class Cr50Pinmux:
         if val == 0:
             return None
 
-        if 0x1a <= val <= 0x1e:
-            return self.diom[0x1e - val]
+        if 0x1A <= val <= 0x1E:
+            return self.diom[0x1E - val]
 
-        if 0xb <= val <= 0x19:
+        if 0xB <= val <= 0x19:
             return self.dioa[0x19 - val]
 
-        if 0x3 <= val <= 0xa:
-            return self.diob[0xa - val]
+        if 0x3 <= val <= 0xA:
+            return self.diob[0xA - val]
 
         if val == 0x2:
             return self.vio[0]
@@ -152,7 +152,7 @@ class Cr50Pinmux:
             return self.vio[1]
 
         return None
-    
+
     def pinmux_worker(self):
         while True:
             try:
@@ -177,7 +177,7 @@ class Cr50Pinmux:
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
-        
+
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
         self.opqueue.join()
@@ -191,7 +191,7 @@ class Cr50Pinmux:
             val = 0
 
         queue.put(val)
-    
+
     def write_sel(self, size: int, value: int, index: int):
         # Index is ALWAYS valid, because of the regmap.
 
@@ -199,32 +199,30 @@ class Cr50Pinmux:
         if not drived_device:
             # Ignore the device, because gscemu doesn't support it.
             return
-        
+
         # Validate the value given to the SEL register
-        if (value > 0x63):
+        if value > 0x63:
             drived_device.disconnect_driver()
             self.sel_stored[index] = 0
             return
 
         self.sel_stored[index] = value
-        
+
         if value == 0:
             drived_device.disconnect_driver()
             return
-        
+
         if index < 31:
-            driver_device = (
-                self._convert_pinmux_sel_val_to_gpio_pindevice(value)
+            driver_device = self._convert_pinmux_sel_val_to_gpio_pindevice(
+                value
             )
         else:
-            driver_device = (
-                self._convert_pinmux_sel_val_to_dio_pindevice(value)
-            )
+            driver_device = self._convert_pinmux_sel_val_to_dio_pindevice(value)
 
         if not driver_device:
             # Ignore the device, because gscemu doesn't support it.
             return
-        
+
         drived_device.drive_by_component(driver=driver_device)
 
     def read_ctl(self, size: int, queue: queue.Queue, index: int):
@@ -246,13 +244,13 @@ class Cr50Pinmux:
         if not drived_device:
             prints.warning("Could not find drived_device for CTL!!")
             return
-        
+
         if not (value & 0x18 == 0x18):
-            if value & 0x8: # PD_MASK
+            if value & 0x8:  # PD_MASK
                 drived_device.add_external_drive_by_component(
                     "PINMUX_CTL", self.internal_pd
                 )
-            elif value & 0x10: # PU_MASK
+            elif value & 0x10:  # PU_MASK
                 drived_device.add_external_drive_by_component(
                     "PINMUX_CTL", self.internal_pu
                 )
@@ -261,9 +259,9 @@ class Cr50Pinmux:
                 drived_device.disconnect_external_driver("PINMUX_CTL")
         else:
             prints.warning("Conflicting SEL PD/PU in PINMUX!")
-        
+
         # Should we enable input reading?
-        if value & 0x4: # IE_MASK
+        if value & 0x4:  # IE_MASK
             # Enable input
             drived_device.mask_pininfo(False)
         else:
@@ -272,31 +270,32 @@ class Cr50Pinmux:
 
     def read_exiten0(self, size: int, queue: queue.Queue):
         queue.put(self.exiten0)
-    
+
     def write_exiten0(self, size: int, value: int):
         self.exiten0 = value
         return
-    
+
     def read_exitedge0(self, size: int, queue: queue.Queue):
         queue.put(self.exitedge0)
-    
+
     def write_exitedge0(self, size: int, value: int):
         self.exitedge0 = value
         return
-    
+
     def read_exitinv0(self, size: int, queue: queue.Queue):
         queue.put(self.exitinv0)
-    
+
     def write_exitinv0(self, size: int, value: int):
         self.exitinv0 = value
         return
 
     def read_hold(self, size: int, queue: queue.Queue):
         queue.put(self.hold)
-    
+
     def write_hold(self, size: int, value: int):
         self.hold = value
         return
+
 
 def init_Cr50Pinmux(ctx: EmulatorContext, regs: dict):
     c_emu = Cr50Pinmux(ctx)
@@ -310,13 +309,11 @@ def init_Cr50Pinmux(ctx: EmulatorContext, regs: dict):
     }
 
     idx_regs_to_regmap(
-        reg_fn_map, PINMUX_SEL_REGS_LIST,
-        c_emu.read_sel, c_emu.write_sel
+        reg_fn_map, PINMUX_SEL_REGS_LIST, c_emu.read_sel, c_emu.write_sel
     )
 
     idx_regs_to_regmap(
-        reg_fn_map, PINMUX_CTL_REGS_LIST,
-        c_emu.read_ctl, c_emu.write_ctl
+        reg_fn_map, PINMUX_CTL_REGS_LIST, c_emu.read_ctl, c_emu.write_ctl
     )
 
     def component_read_handler(

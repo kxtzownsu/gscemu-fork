@@ -9,9 +9,9 @@ import threading
 from lib.emulator_context import EmulatorContext, ComponentObjects
 from env import *
 from lib.logger import GscemuLogger
-from lib.helpers import unhandled_register_exit
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
+
 
 class UsbController:
     def __init__(self):
@@ -44,23 +44,22 @@ class UsbController:
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
-        
+
     def queue_write_worker_op(self, size: int, value: int, target_fn):
         self.opqueue.put([target_fn, (size, value)])
 
     def read_grstctl(self, size: int, queue: queue.Queue):
         queue.put(self.grstctl)
-    
+
     def write_grstctl(self, size: int, value: int):
         return
+
 
 def init_UsbController(ctx: EmulatorContext, regs: dict):
     c_emu = UsbController()
     c_emu.start_worker()
 
-    reg_fn_map = {
-        regs["GRSTCTL"]: [c_emu.read_grstctl, c_emu.write_grstctl]
-    }
+    reg_fn_map = {regs["GRSTCTL"]: [c_emu.read_grstctl, c_emu.write_grstctl]}
 
     def component_read_handler(
         uc: qemu.Uc,
@@ -84,7 +83,7 @@ def init_UsbController(ctx: EmulatorContext, regs: dict):
             c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
         except KeyError:
             return 0
-        
+
     return ComponentObjects(
         c_emu, component_read_handler, component_write_handler
     )

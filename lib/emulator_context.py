@@ -3,7 +3,7 @@
 
 """
 Class to keep emulator context state, to pass around objects of classes made
-necessary for multi-threaded emulator opeeration.. This makes gscemulator 
+necessary for multi-threaded emulator opeeration.. This makes gscemulator
 more modular instead of being restrictive about module paths, and only being
 able to create one Emulator object.
 """
@@ -13,23 +13,25 @@ import unicorn as qemu
 from lib.ucthread import UcThread
 from lib.threadutils import UcMutex
 
+
 class ComponentObjects:
     def __init__(self, object=None, read_fn=None, write_fn=None):
         self.object = object
         self.read_fn = read_fn
         self.write_fn = write_fn
 
+
 class EmulatorContext:
     def __init__(self, uc: qemu.Uc = None):
         if uc is None:
             raise ValueError("uc cannot be empty!")
-        
+
         self.uc: qemu.Uc = uc
-        
+
         self.ucmutex: UcMutex = UcMutex(self.uc)
         self.ucthread: UcThread = UcThread(self.uc)
 
-        # Follow a standard of 
+        # Follow a standard of
         # {
         #   "GPIO": ComponentObjects,
         #   "GLOBALSEC": ComponentObjects,

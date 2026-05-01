@@ -11,7 +11,7 @@ to the user. We could make a seperate class in the future instead?
 import typing
 import unicorn as qemu
 
-from lib.emulator_context import EmulatorContext, ComponentObjects
+from lib.emulator_context import EmulatorContext
 from env import *
 from lib.logger import GscemuLogger
 
@@ -20,10 +20,11 @@ from .components.m3 import (
     exc_return_handler,
     handle_externally_pended_interrupts,
     wait_for_interrupt,
-    unsafe_pend_sysintr
+    unsafe_pend_sysintr,
 )
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
+
 
 def mem_invalid_access(
     uc: qemu.Uc,
@@ -31,23 +32,23 @@ def mem_invalid_access(
     address: int,
     size: int,
     value: int,
-    user_data: EmulatorContext
+    user_data: EmulatorContext,
 ) -> bool:
     kind = {
-        qemu.UC_MEM_READ_UNMAPPED: "READ", 
-        qemu.UC_MEM_WRITE_UNMAPPED: "WRITE", 
+        qemu.UC_MEM_READ_UNMAPPED: "READ",
+        qemu.UC_MEM_WRITE_UNMAPPED: "WRITE",
         qemu.UC_MEM_FETCH_UNMAPPED: "FETCH",
     }
 
     prints.warning(
-        f"Bad memory access {kind[access]} at 0x{address:x} on " +
-        f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}." +
-        "Emulator will crash soon..."
+        f"Bad memory access {kind[access]} at 0x{address:x} on "
+        + f"pc=0x{uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}."
+        + "Emulator will crash soon..."
     )
     if access == qemu.UC_MEM_WRITE_UNMAPPED:
         prints.warning(f"value written = 0x{value:x}")
-        
-    unsafe_pend_sysintr(user_data.c_fast.m3, 5) # BusFault
+
+    unsafe_pend_sysintr(user_data.c_fast.m3, 5)  # BusFault
 
     # When we return from a UC_MEM_x_UNMAPPED hook, we need to map the memory.
     # Unicorn will try to re-access the memory and crash the emulator.
@@ -63,24 +64,27 @@ def mem_invalid_access(
 
     return True
 
+
 def intr_hook(
     uc: qemu.Uc,
-    intno: int, 
+    intno: int,
     user_data: EmulatorContext,
 ):
     ctx = user_data
 
-    match intno:
-        case 2: # EXCP_SWI
-            pend_svcall_interrupt(ctx.c_fast.m3)
-        case 8: # EXCP_EXCEPTION_EXIT
-            exc_return_handler(ctx.c_fast.m3)
-        case _:
-            prints.fatal(
-                f"unhandled intr={intno}, " +
-                f"pc=0x{ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}")
+    if intno == 2:
+        # EXCP_SWI
+        pend_svcall_interrupt(ctx.c_fast.m3)
+    elif intno == 8:  # EXCP_EXCEPTION_EXIT
+        exc_return_handler(ctx.c_fast.m3)
+    else:
+        prints.fatal(
+            f"unhandled intr={intno}, "
+            + f"pc=0x{ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
+        )
 
     return True
+
 
 def handle_wfi_instruction(
     uc: qemu.Uc,
@@ -90,13 +94,14 @@ def handle_wfi_instruction(
 
     # Wait until an interrupt is externally pended from an external source.
     wait_for_interrupt(ctx.c_fast.m3)
-    
+
     # Increment past the wfi instruction
     ctx.ucmutex.reg_write(
-        qemu.arm_const.UC_ARM_REG_PC, 
-        (ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PC) + 2) | 1
+        qemu.arm_const.UC_ARM_REG_PC,
+        (ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PC) + 2) | 1,
     )
     return True
+
 
 def m3_interrupt_safe_point(
     uc: qemu.Uc,
@@ -108,6 +113,7 @@ def m3_interrupt_safe_point(
     handle_externally_pended_interrupts(ctx.c_fast.m3)
     return True
 
+
 def pc_logger(
     uc: qemu.Uc,
     address: int,
@@ -117,10 +123,11 @@ def pc_logger(
     user_data.write(f"{hex(address)}\n")
     user_data.flush()
 
+
 def blank_tick_hook(
     uc: qemu.Uc,
     address: int,
     size: int,
-    user_data: typing.TextIO, 
+    user_data: typing.TextIO,
 ) -> bool:
     return True

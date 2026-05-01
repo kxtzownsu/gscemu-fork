@@ -18,7 +18,7 @@ from env import *
 from lib.logger import GscemuLogger
 from lib.threadutils import FifoLock
 from lib.helpers import (
-    unhandled_register_io, 
+    unhandled_register_io,
     unhandled_register_exit,
     idx_regs_to_regmap,
     args_lambda_gen,
@@ -31,11 +31,12 @@ prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 # We need this for components that we may not handle.
 _CUSTOM_AUTOUNPEND = [
-    207, # UART2_TXINT
+    207,  # UART2_TXINT
 ]
 
-_CYCCNT_SPEED = (1/24000000) * 1000000000
+_CYCCNT_SPEED = (1 / 24000000) * 1000000000
 _EXC_RETURN_VALS = [0xFFFFFFF1, 0xFFFFFFF9, 0xFFFFFFFD]
+
 
 class ArmInterruptHandler:
     def __init__(self, arm_cpu):
@@ -48,20 +49,20 @@ class ArmInterruptHandler:
 
         self.nvic_pend_lock = threading.Lock()
 
-        self.nvic_en = [0] * (32 * 8) # ISER/ICER
-        self.nvic_pend = [0] * (32 * 8) # ISPR/ICPR
-        self.nvic_pri = [0] * (32 * 8) # IPR
+        self.nvic_en = [0] * (32 * 8)  # ISER/ICER
+        self.nvic_pend = [0] * (32 * 8)  # ISPR/ICPR
+        self.nvic_pri = [0] * (32 * 8)  # IPR
 
         # Store system exception pends in a seperate dictionary.
         self.nvic_sys_pend = [0] * 15
         self.nvic_sys_pri = [
             # Fixed priority levels
-            -3, # Reset
-            -2, # NMI
-            -1, # HardFault
+            -3,  # Reset
+            -2,  # NMI
+            -1,  # HardFault
         ] + ([0] * (12))
 
-        # TODO(appleflyer): We need a way to send a signal when these values 
+        # TODO(appleflyer): We need a way to send a signal when these values
         # change. Polling the values with UC_HOOK_CODE is too slow.
         self.primask = 0
         self.faultmask = 0
@@ -96,14 +97,14 @@ class ArmInterruptHandler:
 
                 # There are exceptions pending. Check if we should branch to any
                 # of them.
-                winning_exception = (
-                    self.should_trigger_exception(pending_exceptions)
+                winning_exception = self.should_trigger_exception(
+                    pending_exceptions
                 )
 
                 if winning_exception == -1:
                     self.intr_queue.task_done()
                     continue
-            
+
                 # If we are still here, it means we need to branch to
                 # winning_exc exception.
                 self.branch_to_exception(winning_exception)
@@ -119,82 +120,93 @@ class ArmInterruptHandler:
         self.intr_thread.start()
 
     def queue_internal_read_worker_op(
-        self, 
-        size: int, 
-        target_fn: typing.Callable
+        self, size: int, target_fn: typing.Callable
     ) -> None:
         retqueue = queue.Queue()
-        self.intr_queue.put([
-            target_fn,
-            True, # increment_pc
-            (size, retqueue)
-        ])
+        self.intr_queue.put(
+            [
+                target_fn,
+                True,  # increment_pc
+                (size, retqueue),
+            ]
+        )
         self.intr_queue.join()
         return retqueue.get_nowait()
-        
+
     def queue_internal_write_worker_op(
-        self, 
-        size: int, 
-        value: int, 
-        target_fn: typing.Callable
+        self, size: int, value: int, target_fn: typing.Callable
     ):
-        self.intr_queue.put([
-            target_fn, 
-            True, # increment_pc
-            (size, value)
-        ])
+        self.intr_queue.put(
+            [
+                target_fn,
+                True,  # increment_pc
+                (size, value),
+            ]
+        )
         self.intr_queue.join()
 
     def queue_exc_return(self) -> None:
-        self.intr_queue.put([
-            self.exc_return_callback, 
-            False, # increment_pc
-            tuple()
-        ])
+        self.intr_queue.put(
+            [
+                self.exc_return_callback,
+                False,  # increment_pc
+                tuple(),
+            ]
+        )
         self.intr_queue.join()
 
     def queue_svcall_interrupt(self) -> None:
-        self.intr_queue.put([
-            self.pend_svcall_interrupt, 
-            False, # increment_pc
-            tuple()
-        ])
+        self.intr_queue.put(
+            [
+                self.pend_svcall_interrupt,
+                False,  # increment_pc
+                tuple(),
+            ]
+        )
         self.intr_queue.join()
 
     def queue_unsafe_pend_external_irq(self) -> None:
-        self.intr_queue.put([
-            self.unsafe_pend_external_irq,
-            False, # increment_pc
-            tuple()
-        ])
+        self.intr_queue.put(
+            [
+                self.unsafe_pend_external_irq,
+                False,  # increment_pc
+                tuple(),
+            ]
+        )
         self.intr_queue.join()
 
     def queue_unsafe_unpend_external_irq(self) -> None:
-        self.intr_queue.put([
-            self.unsafe_unpend_external_irq,
-            False, # increment_pc
-            tuple()
-        ])
+        self.intr_queue.put(
+            [
+                self.unsafe_unpend_external_irq,
+                False,  # increment_pc
+                tuple(),
+            ]
+        )
         self.intr_queue.join()
 
     def queue_unsafe_pend_sysintr(self, intr: int) -> None:
-        self.intr_queue.put([
-            self.unsafe_pend_sysintr,
-            False, # increment_pc
-            (intr,)
-        ])
+        self.intr_queue.put(
+            [
+                self.unsafe_pend_sysintr,
+                False,  # increment_pc
+                (intr,),
+            ]
+        )
         self.intr_queue.join()
 
     def handle_externally_pended_interrupts(self) -> None:
         if not self.external_interrupt_pending.is_set():
             return
         self.external_interrupt_pending.clear()
-        
-        self.intr_queue.put([
-            None,
-            False, # increment_pc
-            tuple()
-        ])
+
+        self.intr_queue.put(
+            [
+                None,
+                False,  # increment_pc
+                tuple(),
+            ]
+        )
         self.intr_queue.join()
 
     def should_autoclear_exception(self, exception_num: int) -> None:
@@ -203,7 +215,7 @@ class ArmInterruptHandler:
         if exception_num not in [2, 3, 4, 5, 6, 11, 12, 14, 15]:
             if exception_num not in _CUSTOM_AUTOUNPEND:
                 return
-        
+
         # Unpend the interrupt we're about to branch to.
         if exception_num >= 16:
             with self.nvic_pend_lock:
@@ -213,7 +225,7 @@ class ArmInterruptHandler:
 
     def pend_svcall_interrupt(self) -> None:
         curr_exc_pri = self.get_current_exception_priority()
-        
+
         # We are in an exception, can we branch to SVCall?
         if curr_exc_pri != 0xFFFFFFFF:
             if self.nvic_sys_pri[11 - 1] >= curr_exc_pri:
@@ -266,23 +278,23 @@ class ArmInterruptHandler:
         elif address == _EXC_RETURN_VALS[2]:
             sp_type = qemu.arm_const.UC_ARM_REG_PSP
         else:
-            prints.fatal(
-                f"EXC_RETURN invalid pc=0x{address:x}"
-            )
+            prints.fatal(f"EXC_RETURN invalid pc=0x{address:x}")
 
         if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_IPSR) != 2:
             self.ctx.ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_FAULTMASK, 0)
 
-        for reg in reversed([
-            qemu.arm_const.UC_ARM_REG_XPSR,
-            qemu.arm_const.UC_ARM_REG_PC,
-            qemu.arm_const.UC_ARM_REG_LR,
-            qemu.arm_const.UC_ARM_REG_R12,
-            qemu.arm_const.UC_ARM_REG_R3,
-            qemu.arm_const.UC_ARM_REG_R2,
-            qemu.arm_const.UC_ARM_REG_R1,
-            qemu.arm_const.UC_ARM_REG_R0,
-        ]):
+        for reg in reversed(
+            [
+                qemu.arm_const.UC_ARM_REG_XPSR,
+                qemu.arm_const.UC_ARM_REG_PC,
+                qemu.arm_const.UC_ARM_REG_LR,
+                qemu.arm_const.UC_ARM_REG_R12,
+                qemu.arm_const.UC_ARM_REG_R3,
+                qemu.arm_const.UC_ARM_REG_R2,
+                qemu.arm_const.UC_ARM_REG_R1,
+                qemu.arm_const.UC_ARM_REG_R0,
+            ]
+        ):
             reg_val = read_u32_from_sp(self.ctx.ucmutex, sp_type)
             self.ctx.ucmutex.reg_write(reg, reg_val)
 
@@ -303,20 +315,20 @@ class ArmInterruptHandler:
         # FAULTMASK is set, all exceptions disabled NMI and Reset.
         if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_FAULTMASK):
             return
-        
+
         # HardFault
         if self.nvic_sys_pend[2]:
             pending_exceptions[3] = self.nvic_sys_pri[2]
-        
+
         # PRIMASK is set, only allow Reset/NMI/HardFault.
         if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PRIMASK):
             return
-        
+
         for exc in range(len(self.nvic_sys_pend)):
             if not self.nvic_sys_pend[exc]:
                 continue
             pending_exceptions[exc + 1] = self.nvic_sys_pri[exc]
-            
+
         with self.nvic_pend_lock:
             for irq in range(len(self.nvic_pend)):
                 if not self.nvic_pend[irq]:
@@ -326,17 +338,15 @@ class ArmInterruptHandler:
                 pending_exceptions[irq + 16] = self.nvic_pri[irq]
 
     def get_current_exception_priority(self) -> bool:
-        current_exc_num = self.ctx.uc.reg_read(
-            qemu.arm_const.UC_ARM_REG_IPSR
-        )
-            
+        current_exc_num = self.ctx.uc.reg_read(qemu.arm_const.UC_ARM_REG_IPSR)
+
         if current_exc_num:
             # We are in an exception. Check it's priority level.
             if current_exc_num >= 16:
                 return self.nvic_pri[current_exc_num - 16]
             else:
                 return self.nvic_sys_pri[current_exc_num - 1]
-        
+
         # Return an impossible exception priority, signifying that there's no
         # exception active, because it's impossible to get a priority.
         return 0xFFFFFFFF
@@ -345,24 +355,23 @@ class ArmInterruptHandler:
         # First, find a winning exception out of all the pending
         # exceptions.
         winning_exc = min(
-            pending_exceptions.items(), 
-            key=lambda x: (x[1], x[0])
+            pending_exceptions.items(), key=lambda x: (x[1], x[0])
         )
         winning_exc_num, winning_exc_pri = winning_exc
 
-        # Second, check if we are in an exception. If so, check its priority 
+        # Second, check if we are in an exception. If so, check its priority
         # level to see if it's lower than our winning_exc.
         current_exc_pri = self.get_current_exception_priority()
-        if current_exc_pri != 0xFFFFFFFF: # Means we're not in an exception.
+        if current_exc_pri != 0xFFFFFFFF:  # Means we're not in an exception.
             # In an exception.
             if winning_exc_pri >= current_exc_pri:
                 # The current winning exception priority isn't low enough. Do
                 # not trigger another stacked exception.
                 return -1
-            
+
         # We aren't in an exception, or the new exception won.
         return winning_exc_num
-    
+
     def branch_to_exception(self, exception_num: int) -> None:
         # exception_num starts from 1 here.
 
@@ -399,9 +408,9 @@ class ArmInterruptHandler:
         current_mode = None
         current_sp = None
         built_exc_return = None
-        if self.ctx.ucmutex.reg_read(
-            qemu.arm_const.UC_ARM_REG_CONTROL
-        ) & 2: # thread = psp, handler = msp
+        if (
+            self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_CONTROL) & 2
+        ):  # thread = psp, handler = msp
             if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_IPSR):
                 # handler
                 current_mode = "handler"
@@ -410,7 +419,7 @@ class ArmInterruptHandler:
                 # thread
                 current_mode = "thread"
                 current_sp = "psp"
-        else: # thread = msp, handler = msp
+        else:  # thread = msp, handler = msp
             if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_IPSR):
                 # handler
                 current_mode = "handler"
@@ -434,31 +443,37 @@ class ArmInterruptHandler:
                 )
 
         # Push the exception frame to the stack
-        for reg in [qemu.arm_const.UC_ARM_REG_XPSR,
-                    qemu.arm_const.UC_ARM_REG_PC,
-                    qemu.arm_const.UC_ARM_REG_LR,
-                    qemu.arm_const.UC_ARM_REG_R12,
-                    qemu.arm_const.UC_ARM_REG_R3,
-                    qemu.arm_const.UC_ARM_REG_R2,
-                    qemu.arm_const.UC_ARM_REG_R1,
-                    qemu.arm_const.UC_ARM_REG_R0]:
+        for reg in [
+            qemu.arm_const.UC_ARM_REG_XPSR,
+            qemu.arm_const.UC_ARM_REG_PC,
+            qemu.arm_const.UC_ARM_REG_LR,
+            qemu.arm_const.UC_ARM_REG_R12,
+            qemu.arm_const.UC_ARM_REG_R3,
+            qemu.arm_const.UC_ARM_REG_R2,
+            qemu.arm_const.UC_ARM_REG_R1,
+            qemu.arm_const.UC_ARM_REG_R0,
+        ]:
             reg_val = self.ctx.ucmutex.reg_read(reg)
             if reg == qemu.arm_const.UC_ARM_REG_PC:
                 reg_val |= 1
             write_u32_to_sp(self.ctx.ucmutex, reg_val)
-        
+
         # Place EXC_RETURN val into LR and enter handler mode by changing IPSR.
-        self.ctx.ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_LR, built_exc_return)
-        self.ctx.ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_IPSR, exception_num)
+        self.ctx.ucmutex.reg_write(
+            qemu.arm_const.UC_ARM_REG_LR, built_exc_return
+        )
+        self.ctx.ucmutex.reg_write(
+            qemu.arm_const.UC_ARM_REG_IPSR, exception_num
+        )
 
         # IT state is cleared, as documented in the ARM psuedocode
         # EPSR.IT<7:0> = Zeros(8);
         self.ctx.ucmutex.reg_write(
-            qemu.arm_const.UC_ARM_REG_EPSR, 
+            qemu.arm_const.UC_ARM_REG_EPSR,
             (
-                self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_EPSR) 
-                & ~0x600fc00
-            )
+                self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_EPSR)
+                & ~0x600FC00
+            ),
         )
 
         # Generate the handler's PC based on the VTOR address
@@ -475,13 +490,13 @@ class ArmInterruptHandler:
 
         # If the NVIC should handle this exception pend clear, do it.
         self.should_autoclear_exception(exception_num)
-        
+
     def read_iser(self, size: int, queue: queue.Queue, index: int) -> None:
         value = 0
         base = index * 32
         for bit in range(32):
             if self.nvic_en[base + bit]:
-                value |= (1 << bit)
+                value |= 1 << bit
         queue.put(value)
 
     def write_iser(self, size: int, value: int, index: int) -> None:
@@ -495,7 +510,7 @@ class ArmInterruptHandler:
         base = index * 32
         for bit in range(32):
             if self.nvic_en[base + bit]:
-                value |= (1 << bit)
+                value |= 1 << bit
         queue.put(value)
 
     def write_icer(self, size: int, value: int, index: int) -> None:
@@ -509,7 +524,7 @@ class ArmInterruptHandler:
         base = index * 32
         for bit in range(32):
             if self.nvic_pend[base + bit]:
-                value |= (1 << bit)
+                value |= 1 << bit
         queue.put(value)
 
     def write_ispr(self, size: int, value: int, index: int) -> None:
@@ -523,7 +538,7 @@ class ArmInterruptHandler:
         base = index * 32
         for bit in range(32):
             if self.nvic_pend[base + bit]:
-                value |= (1 << bit)
+                value |= 1 << bit
         queue.put(value)
 
     def write_icpr(self, size: int, value: int, index: int) -> None:
@@ -536,16 +551,16 @@ class ArmInterruptHandler:
         value = 0
         base = index * 4
         for byte in range(4):
-            value |= (((self.nvic_pri[base + byte] & 0x7) << 5) << (byte * 8))
+            value |= ((self.nvic_pri[base + byte] & 0x7) << 5) << (byte * 8)
 
         queue.put(value)
 
     def write_ipr(self, size: int, value: int, index: int) -> None:
         base = index * 4
-        for byte in range(4):            
+        for byte in range(4):
             self.nvic_pri[base + byte] = (
-                (((value >> (byte * 8)) & 0xFF) >> 5) & 0x7
-            )
+                ((value >> (byte * 8)) & 0xFF) >> 5
+            ) & 0x7
 
     def read_stir(self, size: int, queue: queue.Queue) -> None:
         unhandled_register_io(prints, "READ", "NVIC_STIR", "M3")
@@ -555,12 +570,13 @@ class ArmInterruptHandler:
         # 0x1FF as of ARM spec which states that bits 9 - 32 are reserved.
         self.nvic_pend[value & 0x1FF] = True
 
+
 class ArmSC300:
     def __init__(self, ctx: EmulatorContext):
         self.ctx = ctx
 
         self.mutex = FifoLock()
-        self.cpuid = 0x410fc331 # Known CPUID for the ArmSC300
+        self.cpuid = 0x410FC331  # Known CPUID for the ArmSC300
 
         self.intr_op = ArmInterruptHandler(self)
         self.intr_op.start_intr_worker()
@@ -683,13 +699,14 @@ class ArmSC300:
     def read_dwt_cyccnt(self, size: int) -> None:
         with self.mutex:
             val = int(
-                (time.perf_counter_ns() - self.cyccnt_time_start) 
+                (time.perf_counter_ns() - self.cyccnt_time_start)
                 // _CYCCNT_SPEED
             )
             return val
 
     def write_dwt_cyccnt(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "M3", "DWT_CYCCNT")
+
 
 def init_ArmSC300(ctx: EmulatorContext, regs: dict):
     c_emu = ArmSC300(ctx)
@@ -703,7 +720,6 @@ def init_ArmSC300(ctx: EmulatorContext, regs: dict):
         regs["VTOR"]: [c_emu.read_vtor, c_emu.write_vtor],
         regs["CCR"]: [c_emu.read_ccr, c_emu.write_ccr],
         regs["SHSCR"]: [c_emu.read_shscr, c_emu.write_shscr],
-
         regs["MMFS"]: [c_emu.read_mmfs, c_emu.write_mmfs],
         regs["BFAR"]: [c_emu.read_bfar, c_emu.write_bfar],
         regs["MFAR"]: [c_emu.read_mfar, c_emu.write_mfar],
@@ -716,29 +732,37 @@ def init_ArmSC300(ctx: EmulatorContext, regs: dict):
     }
 
     idx_regs_to_regmap(
-        intr_fn_map, regs["NVIC_ISER"],
-        c_emu.intr_op.read_iser, c_emu.intr_op.write_iser
+        intr_fn_map,
+        regs["NVIC_ISER"],
+        c_emu.intr_op.read_iser,
+        c_emu.intr_op.write_iser,
     )
 
     idx_regs_to_regmap(
-        intr_fn_map, regs["NVIC_ICER"],
-        c_emu.intr_op.read_icer, c_emu.intr_op.write_icer
+        intr_fn_map,
+        regs["NVIC_ICER"],
+        c_emu.intr_op.read_icer,
+        c_emu.intr_op.write_icer,
     )
 
     idx_regs_to_regmap(
-        intr_fn_map, regs["NVIC_ICPR"],
-        c_emu.intr_op.read_icpr, c_emu.intr_op.write_icpr
+        intr_fn_map,
+        regs["NVIC_ICPR"],
+        c_emu.intr_op.read_icpr,
+        c_emu.intr_op.write_icpr,
     )
 
     idx_regs_to_regmap(
-        intr_fn_map, regs["NVIC_IPR"],
-        c_emu.intr_op.read_ipr, c_emu.intr_op.write_ipr
+        intr_fn_map,
+        regs["NVIC_IPR"],
+        c_emu.intr_op.read_ipr,
+        c_emu.intr_op.write_ipr,
     )
 
     for k, v in intr_fn_map.items():
         reg_fn_map[k] = [
-            args_lambda_gen(c_emu.intr_op.queue_internal_read_worker_op, v[0]), 
-            args_lambda_gen(c_emu.intr_op.queue_internal_write_worker_op, v[1])
+            args_lambda_gen(c_emu.intr_op.queue_internal_read_worker_op, v[0]),
+            args_lambda_gen(c_emu.intr_op.queue_internal_write_worker_op, v[1]),
         ]
 
     def component_read_handler(
@@ -768,35 +792,44 @@ def init_ArmSC300(ctx: EmulatorContext, regs: dict):
         c_emu, component_read_handler, component_write_handler
     )
 
+
 def exc_return_handler(c_emu: ArmSC300) -> None:
     c_emu.intr_op.queue_exc_return()
+
 
 def unsafe_pend_external_irq(c_emu: ArmSC300, irq: int) -> None:
     # Only use this if we are sure that it is run in a single threaded
     # context(must be synchronous, not asynchronous with emulator)
     c_emu.intr_op.queue_unsafe_pend_external_irq(irq)
 
+
 def unsafe_unpend_external_irq(c_emu: ArmSC300, irq: int) -> None:
     # Only use this if we are sure that it is run in a single threaded
     # context(must be synchronous, not asynchronous with emulator)
     c_emu.intr_op.queue_unsafe_unpend_external_irq(irq)
+
 
 def unsafe_pend_sysintr(c_emu: ArmSC300, intr: int) -> None:
     # Only use this if we are sure that it is run in a single threaded
     # context(must be synchronous, not asynchronous with emulator)
     c_emu.intr_op.queue_unsafe_pend_sysintr(intr)
 
+
 def pend_external_irq(c_emu: ArmSC300, irq: int) -> None:
     c_emu.intr_op.pend_external_irq(irq)
+
 
 def unpend_external_irq(c_emu: ArmSC300, irq: int) -> None:
     c_emu.intr_op.unpend_external_irq(irq)
 
+
 def pend_svcall_interrupt(c_emu: ArmSC300) -> None:
     c_emu.intr_op.queue_svcall_interrupt()
 
+
 def handle_externally_pended_interrupts(c_emu: ArmSC300) -> None:
     c_emu.intr_op.handle_externally_pended_interrupts()
+
 
 def wait_for_interrupt(c_emu: ArmSC300) -> None:
     c_emu.intr_op.wait_for_interrupt()
