@@ -319,10 +319,7 @@ def init_Cr50Pinmux(ctx: EmulatorContext, regs: dict):
     )
 
     def component_read_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
@@ -330,11 +327,7 @@ def init_Cr50Pinmux(ctx: EmulatorContext, regs: dict):
             unhandled_register_exit(ctx, prints, "PINMUX", offset)
 
     def component_write_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        value: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, value: int, user_data: typing.Any
     ) -> None:
         try:
             c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])

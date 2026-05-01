@@ -369,10 +369,7 @@ def init_HavenGlobalsec(ctx: EmulatorContext, regs: dict):
     c_emu = HavenGlobalsec(ctx, regs)
 
     reg_fn_map = {
-        regs["DBG_CONTROL"]: [
-            c_emu.read_dbg_control,
-            c_emu.write_dbg_control,
-        ],
+        regs["DBG_CONTROL"]: [c_emu.read_dbg_control, c_emu.write_dbg_control],
         regs["ALERT"]["CFG_LOCK"]: [
             c_emu.read_alert_cfg_lock,
             c_emu.write_alert_cfg_lock,
@@ -492,10 +489,7 @@ def init_HavenGlobalsec(ctx: EmulatorContext, regs: dict):
         ]
 
     def component_read_handler(
-        uc_unused: qemu.Uc,
-        offset: int,
-        size: int,
-        user_data: typing.Any,
+        uc_unused: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:
         try:
             return reg_fn_map[offset][0](size)

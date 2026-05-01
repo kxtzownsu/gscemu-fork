@@ -126,10 +126,7 @@ class GpioController:
             self._pend_pin_interrupt(bit, is_edge=False)
 
     def _handle_edge_transition(
-        self,
-        bit: int,
-        old_level: bool,
-        new_level: bool,
+        self, bit: int, old_level: bool, new_level: bool
     ):
         if not self.gpio_interrupt[bit] or not self.gpio_interrupt_type[bit]:
             return
@@ -552,10 +549,7 @@ def init_GpioController(ctx: EmulatorContext, regs: dict, num: int):
     )
 
     def component_read_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
@@ -563,11 +557,7 @@ def init_GpioController(ctx: EmulatorContext, regs: dict, num: int):
             unhandled_register_exit(ctx, prints, "GPIO", offset)
 
     def component_write_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        value: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, value: int, user_data: typing.Any
     ) -> None:
         try:
             c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])

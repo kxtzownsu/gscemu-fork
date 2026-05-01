@@ -71,10 +71,7 @@ def init_ARMSoftwareDebugPort(ctx: EmulatorContext, regs: dict):
     }
 
     def component_read_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:
         try:
             return reg_fn_map[offset][0](size)
@@ -82,11 +79,7 @@ def init_ARMSoftwareDebugPort(ctx: EmulatorContext, regs: dict):
             unhandled_register_exit(ctx, prints, "SWDP0", offset)
 
     def component_write_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        value: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, value: int, user_data: typing.Any
     ) -> None:
         try:
             reg_fn_map[offset][1](size, value)

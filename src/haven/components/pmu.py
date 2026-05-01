@@ -316,10 +316,7 @@ def init_PowerManagementUnit(ctx: EmulatorContext, regs: dict):
     idx_regs_to_regmap(reg_fn_map, regs["RST"], c_emu.read_rst, c_emu.write_rst)
 
     def component_read_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
@@ -328,11 +325,7 @@ def init_PowerManagementUnit(ctx: EmulatorContext, regs: dict):
             return 0
 
     def component_write_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        value: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, value: int, user_data: typing.Any
     ) -> None:
         try:
             c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])

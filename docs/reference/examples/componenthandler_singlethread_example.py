@@ -35,10 +35,7 @@ def init_ComponentXX(ctx: EmulatorContext, regs: dict):
     reg_fn_map = {regs["XY_PART"]: [c_emu.read_xy, c_emu.write_xy]}
 
     def component_read_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:
         try:
             return reg_fn_map[offset][0](size)
@@ -46,11 +43,7 @@ def init_ComponentXX(ctx: EmulatorContext, regs: dict):
             unhandled_register_exit(ctx, prints, "XX", offset)
 
     def component_write_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        value: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, value: int, user_data: typing.Any
     ) -> None:
         try:
             reg_fn_map[offset][1](size, value)

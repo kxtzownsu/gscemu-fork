@@ -78,12 +78,7 @@ def args_lambda_gen(reg_fn: typing.Callable, *fixed_args) -> typing.Callable:
     )
 
 
-def idx_regs_to_regmap(
-    regmap: list,
-    reglist: list,
-    read_fn,
-    write_fn,
-) -> None:
+def idx_regs_to_regmap(regmap: list, reglist: list, read_fn, write_fn) -> None:
     for idx, offset in enumerate(reglist):
         regmap[offset] = [
             args_lambda_gen(read_fn, idx),
@@ -127,10 +122,7 @@ def pattern_list_gen(starting_offset, indexes, step=4):
     return temp
 
 
-def halt_emulation(
-    uc: qemu.Uc,
-    ucthread: UcThread,
-) -> None:
+def halt_emulation(uc: qemu.Uc, ucthread: UcThread) -> None:
     # PC sync is not guaranteed here, so the caller needs to manage this
     # properly if we use this.
     prints.debug(

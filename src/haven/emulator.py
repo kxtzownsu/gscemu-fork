@@ -85,10 +85,7 @@ class Emulator:
 
         # Now, load the program/firmware into the program flash.
         if not load_firmware(
-            self.ctx,
-            REG_DEFS,
-            fw_paths,
-            strict_fw_size_checks,
+            self.ctx, REG_DEFS, fw_paths, strict_fw_size_checks
         ):
             prints.fatal("Failed to load firmware during init process.")
             return

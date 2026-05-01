@@ -826,22 +826,10 @@ def init_KeymgrController(ctx: EmulatorContext, regs: dict):
     c_emu = KeymgrController(ctx)
 
     reg_fn_map = {
-        regs["FWR_VLD"]: [
-            c_emu.read_fwr_vld,
-            c_emu.write_fwr_vld,
-        ],
-        regs["RWR_VLD"]: [
-            c_emu.read_rwr_vld,
-            c_emu.write_rwr_vld,
-        ],
-        regs["FWR_LOCK"]: [
-            c_emu.read_fwr_lock,
-            c_emu.write_fwr_lock,
-        ],
-        regs["RWR_LOCK"]: [
-            c_emu.read_rwr_lock,
-            c_emu.write_rwr_lock,
-        ],
+        regs["FWR_VLD"]: [c_emu.read_fwr_vld, c_emu.write_fwr_vld],
+        regs["RWR_VLD"]: [c_emu.read_rwr_vld, c_emu.write_rwr_vld],
+        regs["FWR_LOCK"]: [c_emu.read_fwr_lock, c_emu.write_fwr_lock],
+        regs["RWR_LOCK"]: [c_emu.read_rwr_lock, c_emu.write_rwr_lock],
         regs["HKEY_ERR_FLAGS"]: [
             c_emu.read_hkey_err_flags,
             c_emu.write_hkey_err_flags,
@@ -1031,10 +1019,7 @@ def init_KeymgrController(ctx: EmulatorContext, regs: dict):
         ]
 
     def component_read_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:
         try:
             return reg_fn_map[offset][0](size)
@@ -1042,11 +1027,7 @@ def init_KeymgrController(ctx: EmulatorContext, regs: dict):
             unhandled_register_exit(ctx, prints, "KEYMGR", offset)
 
     def component_write_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        value: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, value: int, user_data: typing.Any
     ) -> None:
         try:
             reg_fn_map[offset][1](size, value)

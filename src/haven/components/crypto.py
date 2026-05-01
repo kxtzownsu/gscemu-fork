@@ -279,10 +279,7 @@ def init_CryptoAccelerator(ctx: EmulatorContext, regs: dict):
     )
 
     def component_read_handler(
-        uc_unused: qemu.Uc,
-        offset: int,
-        size: int,
-        user_data: typing.Any,
+        uc_unused: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])

@@ -32,7 +32,7 @@ prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 # We need this for components that we may not handle.
 _CUSTOM_AUTOUNPEND = [
-    207,  # UART2_TXINT
+    207  # UART2_TXINT
 ]
 
 _CYCCNT_SPEED = (1 / 24000000) * 1000000000
@@ -729,7 +729,7 @@ def init_ArmSC300(ctx: EmulatorContext, regs: dict):
     }
 
     intr_fn_map = {
-        regs["NVIC_STIR"]: [c_emu.intr_op.read_stir, c_emu.intr_op.write_stir],
+        regs["NVIC_STIR"]: [c_emu.intr_op.read_stir, c_emu.intr_op.write_stir]
     }
 
     idx_regs_to_regmap(
@@ -767,10 +767,7 @@ def init_ArmSC300(ctx: EmulatorContext, regs: dict):
         ]
 
     def component_read_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:
         try:
             return reg_fn_map[offset][0](size)
@@ -778,11 +775,7 @@ def init_ArmSC300(ctx: EmulatorContext, regs: dict):
             unhandled_register_exit(ctx, prints, "M3", offset)
 
     def component_write_handler(
-        uc: qemu.Uc,
-        offset: int,
-        size: int,
-        value: int,
-        user_data: typing.Any,
+        uc: qemu.Uc, offset: int, size: int, value: int, user_data: typing.Any
     ) -> None:
         try:
             reg_fn_map[offset][1](size, value)
