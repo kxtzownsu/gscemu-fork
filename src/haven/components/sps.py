@@ -47,7 +47,7 @@ class SPISlaveDevice:
         self.fifo_ctrl = 0
         self.rxfifo_threshold = 0
 
-    def sps_worker(self):
+    def sps_worker(self) -> None:
         while True:
             try:
                 op = self.opqueue.get()
@@ -68,51 +68,51 @@ class SPISlaveDevice:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.sps_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> None:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
-    def read_ctrl(self, size: int, queue: queue.Queue):
+    def read_ctrl(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.ctrl)
 
-    def write_ctrl(self, size: int, value: int):
+    def write_ctrl(self, size: int, value: int) -> None:
         self.ctrl = value
 
-    def read_dummy_word(self, size: int, queue: queue.Queue):
+    def read_dummy_word(self, size: int, queue: queue.Queue) -> None:
         # I don't think we can read from DUMMY_WORD, it's unclear.
         queue.put(0)
 
-    def write_dummy_word(self, size: int, value: int):
+    def write_dummy_word(self, size: int, value: int) -> None:
         self.tx_dummy_word = value
 
-    def read_ictrl(self, size: int, queue: queue.Queue):
+    def read_ictrl(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.ictrl)
 
-    def write_ictrl(self, size: int, value: int):
+    def write_ictrl(self, size: int, value: int) -> None:
         self.ictrl = value
 
-    def read_istate(self, size: int, queue: queue.Queue):
+    def read_istate(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.istate)
 
-    def write_istate(self, size: int, value: int):
+    def write_istate(self, size: int, value: int) -> None:
         # Only the system can assert or deassert ISTATE unless by ISTATE_CLR
         return
 
-    def read_istate_clr(self, size: int, queue: queue.Queue):
+    def read_istate_clr(self, size: int, queue: queue.Queue) -> None:
         queue.put(0)
 
-    def write_istate_clr(self, size: int, value: int):
+    def write_istate_clr(self, size: int, value: int) -> None:
         for bit in range(32):
             bs = 1 << bit
             if not value & bs:
@@ -124,20 +124,20 @@ class SPISlaveDevice:
             # Clear the bit in ISTATE
             self.istate &= ~bs
 
-    def read_fifo_ctrl(self, size: int, queue: queue.Queue):
+    def read_fifo_ctrl(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.fifo_ctrl)
 
-    def write_fifo_ctrl(self, size: int, value: int):
+    def write_fifo_ctrl(self, size: int, value: int) -> None:
         self.fifo_ctrl = value
 
-    def read_rxfifo_threshold(self, size: int, queue: queue.Queue):
+    def read_rxfifo_threshold(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.rxfifo_threshold)
 
-    def write_rxfifo_threshold(self, size: int, value: int):
+    def write_rxfifo_threshold(self, size: int, value: int) -> None:
         self.rxfifo_threshold = value
 
 
-def init_SPISlaveDevice(ctx: EmulatorContext, regs: dict):
+def init_SPISlaveDevice(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = SPISlaveDevice(ctx)
     c_emu.start_worker()
 
@@ -156,7 +156,7 @@ def init_SPISlaveDevice(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:

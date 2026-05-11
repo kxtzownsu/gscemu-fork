@@ -8,7 +8,7 @@ import termcolor
 from lib.pindevice import PinDevice, PinStatus
 
 
-def test_single_pin():
+def test_single_pin() -> bool:
     diob4 = PinDevice()
     diob4.set_pininfo(PinStatus.PULLUP, 1000.0)
 
@@ -17,7 +17,7 @@ def test_single_pin():
     )
 
 
-def test_pin_masking():
+def test_pin_masking() -> bool:
     diob4 = PinDevice()
     diob4.set_pininfo(PinStatus.PULLUP, 1000.0)
 
@@ -40,7 +40,7 @@ def test_pin_masking():
     return cond1 and cond2 and cond3
 
 
-def test_pin_contention():
+def test_pin_contention() -> bool:
     # The Cr50 behavior is to just return the pd/pu that has the least
     # resistance. Although, not sure what actually happens on the silicon
     # when theres a PU on one side and PD on another.
@@ -62,7 +62,7 @@ def test_pin_contention():
     )
 
 
-def test_combined_resistance():
+def test_combined_resistance() -> bool:
     # Following the 1/R + 1/R = 1/combined R rule,
     # 1/15 + 1/10 = 1/6, so our resistance is 6ohms.
     gpio0_1 = PinDevice()
@@ -82,12 +82,15 @@ def test_combined_resistance():
     )
 
 
-def test_chained_devices():
+def test_chained_devices() -> bool:
     # A more advanced version of pin contention which involves a looped chain
     # of devices too in a way.
-    # gpio0_2 pd drives gpio0_1 pd, so no pin contention, 1/13 + 1/10 = 1/5.65, so gpio0_1 exp=5.65 pd
+    # gpio0_2 pd drives gpio0_1 pd, so no pin contention, 1/13 + 1/10 = 1/5.65,
+    # so gpio0_1 exp=5.65 pd
+    #
     # gpio0_1 pd drives diob4 pu, so pin contention occurs, so diob4 exp=10.0 pd
-    # diob4 pu drives gpio0_2 pd, so pin contention occurs, so gpio0_2 exp=13.0 pd
+    # diob4 pu drives gpio0_2 pd, so pin contention occurs, so gpio0_2 exp=13.0
+    # pd
 
     gpio0_1 = PinDevice()
     diob4 = PinDevice()

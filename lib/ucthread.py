@@ -15,7 +15,7 @@ class UcThread:
 
         self.exit_thread_signal = threading.Event()
 
-    def emu_thread_worker(self):
+    def emu_thread_worker(self) -> None:
         while True:
             # Wait until the stop lock event is cleared.
             self.stop_lock.wait(None)

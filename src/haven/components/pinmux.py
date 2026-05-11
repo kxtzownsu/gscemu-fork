@@ -75,7 +75,9 @@ class Cr50Pinmux:
         self.exitinv0 = 0
         self.hold = 0
 
-    def _convert_pinmux_ctl_reg_idx_to_pindevice(self, idx: int):
+    def _convert_pinmux_ctl_reg_idx_to_pindevice(
+        self, idx: int
+    ) -> PinDevice | None:
         if idx < 5:
             return self.diom[idx]
 
@@ -93,7 +95,9 @@ class Cr50Pinmux:
 
         return None
 
-    def _convert_pinmux_sel_reg_idx_to_pindevice(self, idx: int):
+    def _convert_pinmux_sel_reg_idx_to_pindevice(
+        self, idx: int
+    ) -> PinDevice | None:
         if idx < 5:
             return self.diom[idx]
 
@@ -118,7 +122,9 @@ class Cr50Pinmux:
         return None
 
     # DIOxx only accepts GPIOx_GPIOx
-    def _convert_pinmux_sel_val_to_gpio_pindevice(self, val: int):
+    def _convert_pinmux_sel_val_to_gpio_pindevice(
+        self, val: int
+    ) -> PinDevice | None:
         if not isinstance(val, int):
             return None
 
@@ -131,7 +137,9 @@ class Cr50Pinmux:
         return None
 
     # GPIOx_GPIOx only accepts DIOxx or VIOx
-    def _convert_pinmux_sel_val_to_dio_pindevice(self, val: int):
+    def _convert_pinmux_sel_val_to_dio_pindevice(
+        self, val: int
+    ) -> PinDevice | None:
         if not isinstance(val, int):
             return None
 
@@ -155,7 +163,7 @@ class Cr50Pinmux:
 
         return None
 
-    def pinmux_worker(self):
+    def pinmux_worker(self) -> None:
         while True:
             try:
                 op = self.opqueue.get()
@@ -168,23 +176,23 @@ class Cr50Pinmux:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.pinmux_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
         self.opqueue.join()
 
-    def read_sel(self, size: int, queue: queue.Queue, index: int):
+    def read_sel(self, size: int, queue: queue.Queue, index: int) -> None:
         val = 0
 
         try:
@@ -194,7 +202,7 @@ class Cr50Pinmux:
 
         queue.put(val)
 
-    def write_sel(self, size: int, value: int, index: int):
+    def write_sel(self, size: int, value: int, index: int) -> None:
         # Index is ALWAYS valid, because of the regmap.
 
         drived_device = self._convert_pinmux_sel_reg_idx_to_pindevice(index)
@@ -227,7 +235,7 @@ class Cr50Pinmux:
 
         drived_device.drive_by_component(driver=driver_device)
 
-    def read_ctl(self, size: int, queue: queue.Queue, index: int):
+    def read_ctl(self, size: int, queue: queue.Queue, index: int) -> None:
         val = 0
 
         try:
@@ -237,7 +245,7 @@ class Cr50Pinmux:
 
         queue.put(val)
 
-    def write_ctl(self, size: int, value: int, index: int):
+    def write_ctl(self, size: int, value: int, index: int) -> None:
         # Index is ALWAYS valid, because of the regmap.
 
         self.ctl_stored[index] = value
@@ -270,36 +278,32 @@ class Cr50Pinmux:
             # Disable input
             drived_device.mask_pininfo(True)
 
-    def read_exiten0(self, size: int, queue: queue.Queue):
+    def read_exiten0(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.exiten0)
 
-    def write_exiten0(self, size: int, value: int):
+    def write_exiten0(self, size: int, value: int) -> None:
         self.exiten0 = value
-        return
 
-    def read_exitedge0(self, size: int, queue: queue.Queue):
+    def read_exitedge0(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.exitedge0)
 
-    def write_exitedge0(self, size: int, value: int):
+    def write_exitedge0(self, size: int, value: int) -> None:
         self.exitedge0 = value
-        return
 
-    def read_exitinv0(self, size: int, queue: queue.Queue):
+    def read_exitinv0(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.exitinv0)
 
-    def write_exitinv0(self, size: int, value: int):
+    def write_exitinv0(self, size: int, value: int) -> None:
         self.exitinv0 = value
-        return
 
-    def read_hold(self, size: int, queue: queue.Queue):
+    def read_hold(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.hold)
 
-    def write_hold(self, size: int, value: int):
+    def write_hold(self, size: int, value: int) -> None:
         self.hold = value
-        return
 
 
-def init_Cr50Pinmux(ctx: EmulatorContext, regs: dict):
+def init_Cr50Pinmux(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = Cr50Pinmux(ctx)
     c_emu.start_worker()
 
@@ -320,7 +324,7 @@ def init_Cr50Pinmux(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:

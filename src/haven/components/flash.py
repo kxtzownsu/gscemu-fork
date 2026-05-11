@@ -79,7 +79,7 @@ class FlashController:
         # Temporary variables used during ops.
         self.start_addr = 0
 
-    def flash_worker(self):
+    def flash_worker(self) -> None:
         while True:
             try:
                 # Wait for the next operation to enter the queue
@@ -130,22 +130,22 @@ class FlashController:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opworker:
             self.opworker = threading.Thread(target=self.flash_worker)
             self.opworker.daemon = True
             self.opworker.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
-    def op_erase_block(self):
+    def op_erase_block(self) -> None:
         # Check if INFO1 is erase locked.
         if self.protect_info1_erase:
             if self.trans_mainb == 1 and self.pe_control == 1:
@@ -174,7 +174,7 @@ class FlashController:
         # All checks passed, start OP_ERASE.
         self.ctx.ucmutex.mem_write(self.start_addr, b"\xff" * 0x800)
 
-    def op_write_block(self):
+    def op_write_block(self) -> None:
         # Check if our TRANS_OFFSET is within bounds.
         if (
             (self.trans_offset * 4) + ((self.trans_size + 1) * 4) - 1
@@ -202,7 +202,7 @@ class FlashController:
                 self.start_addr + (word * 4), self.wr_data[word]
             )
 
-    def op_read_block(self):
+    def op_read_block(self) -> None:
         # We need to ensure the system is only asking for one u32. Anything more
         # or less is invalid.
         if self.trans_size != 1:
@@ -228,7 +228,7 @@ class FlashController:
             self.start_addr
         )
 
-    def op_bulk_erase_bank(self):
+    def op_bulk_erase_bank(self) -> None:
         # Nothing much to check, because most of the values aren't used.
 
         if self.trans_mainb == 0:
@@ -241,7 +241,7 @@ class FlashController:
 
             self.ctx.ucmutex.mem_write(self.start_addr, b"\xff" * 0x800)
 
-    def should_clear_error(self):
+    def should_clear_error(self) -> None:
         # Should we clear the error_code?
 
         if self.error_placed_time is None:  # Honestly this shouldn't resolve.
@@ -250,6 +250,7 @@ class FlashController:
             # is developer negligence.
             self.error_code = 0
             prints.warning("FLASH ERROR register invalid state!")
+            return
 
         # Give 5ms of time before clearing the error.
         if time.perf_counter() > (self.error_placed_time + 0.005):
@@ -257,7 +258,7 @@ class FlashController:
             self.error_placed_time = None
             self.error_code = 0
 
-    def error_countdown(self):
+    def error_countdown(self) -> None:
         # If we have an error code, we need to start the countdown.
         if self.error_code:
             self.error_placed_time = time.perf_counter()
@@ -362,7 +363,7 @@ class FlashController:
         unhandled_register_io(prints, "WRITE", "FLASH0", "BULKERASE_SMART_ALGO")
 
 
-def init_FlashController(ctx: EmulatorContext, regs: dict):
+def init_FlashController(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = FlashController(ctx)
     c_emu.start_worker()
 
@@ -404,7 +405,7 @@ def init_FlashController(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc_unused: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:

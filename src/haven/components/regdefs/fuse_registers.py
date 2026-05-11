@@ -168,7 +168,8 @@ FUSE_DEFAULTS = {
     FUSE_REGISTERS["FW_DEFINED_BROM_CONFIG1"]: 0x55555500,
     FUSE_REGISTERS["FW_DEFINED_BROM_APPLYSEC"]: 0x55555137,
 
-    # expected values on the Cr50, these are correct, DO NOT TOUCH. Hfss will fail if this is modified.
+    # expected values on the Cr50, these are correct, DO NOT TOUCH.
+    # Hfss will fail if this is modified.
     FUSE_REGISTERS["FLASH_PERSO_PAGE_LOCK"]: 0x55555555,
     FUSE_REGISTERS["FW_DEFINED_DATA_BLK0"]: 0x55555502,
     FUSE_REGISTERS["FW_DEFINED_DATA_EXTRA_BLK6"]: 0x55555540,

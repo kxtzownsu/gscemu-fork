@@ -92,7 +92,7 @@ class GpioController:
 
         return not self.gpio_real_levels[bit]
 
-    def _pend_pin_interrupt(self, bit: int, is_edge: bool):
+    def _pend_pin_interrupt(self, bit: int, is_edge: bool) -> None:
         # Pend an interrupt for a pin.
         if self.gpio_pending_interrupts[bit]:
             return
@@ -102,7 +102,7 @@ class GpioController:
         pend_external_irq(self.ctx.c_fast.m3, self.irqnums[0][bit])
         self.should_pend_combined_interrupt()
 
-    def _clear_pin_interrupt(self, bit: int):
+    def _clear_pin_interrupt(self, bit: int) -> None:
         # Clear a pending pin interrupt.
         if not self.gpio_pending_interrupts[bit]:
             return
@@ -112,7 +112,7 @@ class GpioController:
         unpend_external_irq(self.ctx.c_fast.m3, self.irqnums[0][bit])
         self.should_unpend_combined_interrupt()
 
-    def _refresh_level_interrupt(self, bit: int):
+    def _refresh_level_interrupt(self, bit: int) -> None:
         # Handle LOW/HIGH interrupts
         if not self.gpio_interrupt[bit] or self.gpio_interrupt_type[bit]:
             return
@@ -127,7 +127,7 @@ class GpioController:
 
     def _handle_edge_transition(
         self, bit: int, old_level: bool, new_level: bool
-    ):
+    ) -> None:
         if not self.gpio_interrupt[bit] or not self.gpio_interrupt_type[bit]:
             return
 
@@ -144,7 +144,7 @@ class GpioController:
 
         self._pend_pin_interrupt(bit, is_edge=True)
 
-    def gpio_worker(self):
+    def gpio_worker(self) -> None:
         while True:
             try:
                 op = self.opqueue.get()
@@ -157,19 +157,19 @@ class GpioController:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.gpio_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
         self.opqueue.join()
 
@@ -178,7 +178,7 @@ class GpioController:
         current_pinstate: PinStatus,
         new_pinstate: PinStatus,
         pin_number: int,
-    ):
+    ) -> None:
         self.opqueue.put(
             [
                 self.pindevice_interrupt,
@@ -186,11 +186,11 @@ class GpioController:
             ]
         )
 
-    def should_pend_combined_interrupt(self):
+    def should_pend_combined_interrupt(self) -> None:
         if any(self.gpio_pending_interrupts):
             pend_external_irq(self.ctx.c_fast.m3, self.irqnums[1])
 
-    def should_unpend_combined_interrupt(self):
+    def should_unpend_combined_interrupt(self) -> None:
         if not any(self.gpio_pending_interrupts):
             unpend_external_irq(self.ctx.c_fast.m3, self.irqnums[1])
 
@@ -199,7 +199,7 @@ class GpioController:
         current_pinstate: PinStatus,
         new_pinstate: PinStatus,
         pin_number: int,
-    ):
+    ) -> None:
         # Called when the PinStatus changes, is not called if only the
         # resistance changes.
         old_level = self.gpio_real_levels[pin_number]
@@ -212,7 +212,7 @@ class GpioController:
         self._handle_edge_transition(pin_number, old_level, new_level)
         self._refresh_level_interrupt(pin_number)
 
-    def update_gpio_level(self, bit: int, state: int):
+    def update_gpio_level(self, bit: int, state: int) -> None:
         pdpu = None
         if state:
             pdpu = PinStatus.PULLUP
@@ -223,11 +223,11 @@ class GpioController:
 
         self.pindevices[bit].set_pininfo(pdpu, 10.0)
 
-    def set_gpio_io(self, bit: int, io: bool):
+    def set_gpio_io(self, bit: int, io: bool) -> None:
         self.gpio_output[bit] = io
         self.pindevices[bit].mask_pininfo(not io)
 
-    def read_datain(self, size: int, queue: queue.Queue):
+    def read_datain(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_real_levels.
@@ -239,11 +239,11 @@ class GpioController:
 
         queue.put(val)
 
-    def write_datain(self, size: int, value: int):
+    def write_datain(self, size: int, value: int) -> None:
         for bit in range(16):
             self.update_gpio_level(bit, (value & (1 << bit)))
 
-    def read_dataout(self, size: int, queue: queue.Queue):
+    def read_dataout(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_internal_levels.
@@ -255,11 +255,13 @@ class GpioController:
 
         queue.put(val)
 
-    def write_dataout(self, size: int, value: int):
+    def write_dataout(self, size: int, value: int) -> None:
         for bit in range(16):
             self.update_gpio_level(bit, (value & (1 << bit)))
 
-    def read_masklowbyte(self, size: int, queue: queue.Queue, index: int):
+    def read_masklowbyte(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         # index is the mask for bits [7:0]
         val = 0
         for bit in range(8):
@@ -276,7 +278,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_masklowbyte(self, size: int, value: int, index: int):
+    def write_masklowbyte(self, size: int, value: int, index: int) -> None:
         # index is the mask for bits [7:0]
         for bit in range(8):
             # Check if this bit is part of the mask.
@@ -285,7 +287,9 @@ class GpioController:
 
             self.update_gpio_level(bit, bool((value & (1 << bit))))
 
-    def read_maskhighbyte(self, size: int, queue: queue.Queue, index: int):
+    def read_maskhighbyte(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         # index is the mask for bits [7:0]
         val = 0
         for bit in range(8):
@@ -302,7 +306,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_maskhighbyte(self, size: int, value: int, index: int):
+    def write_maskhighbyte(self, size: int, value: int, index: int) -> None:
         for bit in range(8):
             # Check if this bit is part of the mask.
             if not (index & (1 << bit)):
@@ -310,7 +314,7 @@ class GpioController:
 
             self.update_gpio_level(bit + 8, bool((value & (1 << bit + 8))))
 
-    def read_setdouten(self, size: int, queue: queue.Queue):
+    def read_setdouten(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_output.
@@ -322,7 +326,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_setdouten(self, size: int, value: int):
+    def write_setdouten(self, size: int, value: int) -> None:
         for bit in range(16):
             # Check if this bit is part of the mask.
             if not (value & (1 << bit)):
@@ -330,7 +334,7 @@ class GpioController:
 
             self.set_gpio_io(bit, True)
 
-    def read_clrdouten(self, size: int, queue: queue.Queue):
+    def read_clrdouten(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_output.
@@ -342,7 +346,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_clrdouten(self, size: int, value: int):
+    def write_clrdouten(self, size: int, value: int) -> None:
         for bit in range(16):
             # Check if this bit is part of the mask.
             if not (value & (1 << bit)):
@@ -350,7 +354,7 @@ class GpioController:
 
             self.set_gpio_io(bit, False)
 
-    def read_setinttype(self, size: int, queue: queue.Queue):
+    def read_setinttype(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_interrupt_type.
@@ -362,7 +366,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_setinttype(self, size: int, value: int):
+    def write_setinttype(self, size: int, value: int) -> None:
         for bit in range(16):
             # Check if this bit is part of the mask.
             if not (value & (1 << bit)):
@@ -370,7 +374,7 @@ class GpioController:
 
             self.gpio_interrupt_type[bit] = True
 
-    def read_clrinttype(self, size: int, queue: queue.Queue):
+    def read_clrinttype(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_interrupt_type.
@@ -382,7 +386,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_clrinttype(self, size: int, value: int):
+    def write_clrinttype(self, size: int, value: int) -> None:
         for bit in range(16):
             # Check if this bit is part of the mask.
             if not (value & (1 << bit)):
@@ -391,7 +395,7 @@ class GpioController:
             self.gpio_interrupt_type[bit] = False
             self._refresh_level_interrupt(bit)
 
-    def read_setintpol(self, size: int, queue: queue.Queue):
+    def read_setintpol(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_interrupt_polarity.
@@ -403,7 +407,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_setintpol(self, size: int, value: int):
+    def write_setintpol(self, size: int, value: int) -> None:
         for bit in range(16):
             # Check if this bit is part of the mask.
             if not (value & (1 << bit)):
@@ -412,7 +416,7 @@ class GpioController:
             self.gpio_interrupt_polarity[bit] = True
             self._refresh_level_interrupt(bit)
 
-    def read_clrintpol(self, size: int, queue: queue.Queue):
+    def read_clrintpol(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_interrupt_polarity.
@@ -424,7 +428,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_clrintpol(self, size: int, value: int):
+    def write_clrintpol(self, size: int, value: int) -> None:
         for bit in range(16):
             # Check if this bit is part of the mask.
             if not (value & (1 << bit)):
@@ -433,7 +437,7 @@ class GpioController:
             self.gpio_interrupt_polarity[bit] = False
             self._refresh_level_interrupt(bit)
 
-    def read_setinten(self, size: int, queue: queue.Queue):
+    def read_setinten(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_interrupt.
@@ -445,7 +449,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_setinten(self, size: int, value: int):
+    def write_setinten(self, size: int, value: int) -> None:
         for bit in range(16):
             # Check if this bit is part of the mask.
             if not (value & (1 << bit)):
@@ -458,7 +462,7 @@ class GpioController:
             self.gpio_interrupt[bit] = True
             self._refresh_level_interrupt(bit)
 
-    def read_clrinten(self, size: int, queue: queue.Queue):
+    def read_clrinten(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_interrupt.
@@ -470,7 +474,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_clrinten(self, size: int, value: int):
+    def write_clrinten(self, size: int, value: int) -> None:
         for bit in range(16):
             # Check if this bit is part of the mask.
             if not (value & (1 << bit)):
@@ -482,7 +486,7 @@ class GpioController:
 
             self.gpio_interrupt[bit] = False
 
-    def read_clrintstat(self, size: int, queue: queue.Queue):
+    def read_clrintstat(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             # Check if the bit is set in gpio_pending_interrupts.
@@ -494,7 +498,7 @@ class GpioController:
 
         queue.put(val)
 
-    def write_clrintstat(self, size: int, value: int):
+    def write_clrintstat(self, size: int, value: int) -> None:
         for bit in range(16):
             # Check if this bit is part of the mask.
             if not (value & (1 << bit)):
@@ -512,11 +516,13 @@ class GpioController:
             else:
                 self._clear_pin_interrupt(bit)
 
-    def datain_manual_write(self, bit: int, state: bool):
+    def datain_manual_write(self, bit: int, state: bool) -> None:
         self.update_gpio_level(bit, state)
 
 
-def init_GpioController(ctx: EmulatorContext, regs: dict, num: int):
+def init_GpioController(
+    ctx: EmulatorContext, regs: dict, num: int
+) -> ComponentObjects:
     c_emu = GpioController(ctx, num)
     c_emu.start_worker()
 
@@ -550,7 +556,7 @@ def init_GpioController(ctx: EmulatorContext, regs: dict, num: int):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:

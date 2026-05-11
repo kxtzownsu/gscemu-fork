@@ -2,3 +2,7 @@ line-length = 80
 
 [lint]
 ignore = ["F403", "F405"]
+select = [
+    "E", "F",
+    "ANN201", "ANN202" # enable type annotation checking
+]

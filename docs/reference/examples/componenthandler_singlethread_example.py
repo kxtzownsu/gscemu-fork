@@ -36,7 +36,7 @@ def init_ComponentXX(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return reg_fn_map[offset][0](size)
         except KeyError:

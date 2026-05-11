@@ -56,7 +56,7 @@ class TRNGEngine:
         # 1 = on, 0 = off
         self.power_down_b = 0
 
-    def trng_worker(self):
+    def trng_worker(self) -> None:
         while True:
             try:
                 op = self.opqueue.get()
@@ -69,120 +69,122 @@ class TRNGEngine:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.trng_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> None:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
-    def read_read_data(self, size: int, queue: queue.Queue):
+    def read_read_data(self, size: int, queue: queue.Queue) -> None:
         queue.put(secrets.randbits(32))
 
-    def write_read_data(self, size: int, value: int):
+    def write_read_data(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "TRNG", "READ_DATA")
         return
 
-    def read_secure_post_processing_ctrl(self, size: int, queue: queue.Queue):
+    def read_secure_post_processing_ctrl(
+        self, size: int, queue: queue.Queue
+    ) -> None:
         queue.put(self.secure_post_processing_ctrl)
 
-    def write_secure_post_processing_ctrl(self, size: int, value: int):
+    def write_secure_post_processing_ctrl(self, size: int, value: int) -> None:
         self.secure_post_processing_ctrl = value
 
-    def read_post_processing_ctrl(self, size: int, queue: queue.Queue):
+    def read_post_processing_ctrl(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.post_processing_ctrl)
 
-    def write_post_processing_ctrl(self, size: int, value: int):
+    def write_post_processing_ctrl(self, size: int, value: int) -> None:
         self.post_processing_ctrl = value
 
-    def read_ldo_ctrl(self, size: int, queue: queue.Queue):
+    def read_ldo_ctrl(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.ldo_ctrl)
 
-    def write_ldo_ctrl(self, size: int, value: int):
+    def write_ldo_ctrl(self, size: int, value: int) -> None:
         self.ldo_ctrl = value
 
-    def read_analog_ctrl(self, size: int, queue: queue.Queue):
+    def read_analog_ctrl(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.analog_ctrl)
 
-    def write_analog_ctrl(self, size: int, value: int):
+    def write_analog_ctrl(self, size: int, value: int) -> None:
         self.analog_ctrl = value
 
-    def read_allowed_values(self, size: int, queue: queue.Queue):
+    def read_allowed_values(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.allowed_values)
 
-    def write_allowed_values(self, size: int, value: int):
+    def write_allowed_values(self, size: int, value: int) -> None:
         self.allowed_values = value
 
-    def read_slice_max_upper_limit(self, size: int, queue: queue.Queue):
+    def read_slice_max_upper_limit(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.slice_max_upper_limit)
 
-    def write_slice_max_upper_limit(self, size: int, value: int):
+    def write_slice_max_upper_limit(self, size: int, value: int) -> None:
         self.slice_max_upper_limit = value
 
-    def read_slice_min_lower_limit(self, size: int, queue: queue.Queue):
+    def read_slice_min_lower_limit(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.slice_min_lower_limit)
 
-    def write_slice_min_lower_limit(self, size: int, value: int):
+    def write_slice_min_lower_limit(self, size: int, value: int) -> None:
         self.slice_min_lower_limit = value
 
-    def read_power_down_b(self, size: int, queue: queue.Queue):
+    def read_power_down_b(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.power_down_b)
 
-    def write_power_down_b(self, size: int, value: int):
+    def write_power_down_b(self, size: int, value: int) -> None:
         self.power_down_b = value
 
-    def read_go_event(self, size: int, queue: queue.Queue):
+    def read_go_event(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.go_event)
 
-    def write_go_event(self, size: int, value: int):
+    def write_go_event(self, size: int, value: int) -> None:
         self.go_event = value
 
-    def read_stop_work(self, size: int, queue: queue.Queue):
+    def read_stop_work(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.stop_work)
 
-    def write_stop_work(self, size: int, value: int):
+    def write_stop_work(self, size: int, value: int) -> None:
         self.stop_work = value
 
-    def read_empty(self, size: int, queue: queue.Queue):
+    def read_empty(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.empty)
 
-    def write_empty(self, size: int, value: int):
+    def write_empty(self, size: int, value: int) -> None:
         self.empty = value
 
-    def read_timeout_counter(self, size: int, queue: queue.Queue):
+    def read_timeout_counter(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.timeout_counter)
 
-    def write_timeout_counter(self, size: int, value: int):
+    def write_timeout_counter(self, size: int, value: int) -> None:
         self.timeout_counter = value
 
-    def read_timeout_max_try_num(self, size: int, queue: queue.Queue):
+    def read_timeout_max_try_num(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.timeout_max_try_num)
 
-    def write_timeout_max_try_num(self, size: int, value: int):
+    def write_timeout_max_try_num(self, size: int, value: int) -> None:
         self.timeout_max_try_num = value
 
-    def read_fsm_state(self, size: int, queue: queue.Queue):
+    def read_fsm_state(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.fsm_state)
 
-    def write_fsm_state(self, size: int, value: int):
+    def write_fsm_state(self, size: int, value: int) -> None:
         self.fsm_state = value
 
-    def read_output_time_counter(self, size: int, queue: queue.Queue):
+    def read_output_time_counter(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.output_time_counter)
 
-    def write_output_time_counter(self, size: int, value: int):
+    def write_output_time_counter(self, size: int, value: int) -> None:
         self.output_time_counter = value
 
 
-def init_TRNGEngine(ctx: EmulatorContext, regs: dict):
+def init_TRNGEngine(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = TRNGEngine(ctx)
     c_emu.start_worker()
 
@@ -234,7 +236,7 @@ def init_TRNGEngine(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:

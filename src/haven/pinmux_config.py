@@ -7,7 +7,7 @@ from lib.pindevice import PinStatus
 from .components.pinmux import Cr50Pinmux
 
 
-def init_strap_config(pinmux: Cr50Pinmux):
+def init_strap_config(pinmux: Cr50Pinmux) -> None:
     # SPI strap config: DIOA12 = 1M PD, DIOA6 = 1M PD
     pinmux.dioa[6].set_pininfo(PinStatus.PULLDOWN, 1_000_000)
     pinmux.dioa[12].set_pininfo(PinStatus.PULLDOWN, 1_000_000)
@@ -18,7 +18,7 @@ def init_strap_config(pinmux: Cr50Pinmux):
     pinmux.dioa[1].set_pininfo(PinStatus.PULLUP, 1_000_000)
 
 
-def init_custom_board_pinmux_features(pinmux: Cr50Pinmux):
+def init_custom_board_pinmux_features(pinmux: Cr50Pinmux) -> None:
     # DIOM2 is connected to BATT_PRESS_L
     pinmux.diom[2].set_pininfo(PinStatus.PULLUP, 5_000)
 

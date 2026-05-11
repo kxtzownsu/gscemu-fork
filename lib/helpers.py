@@ -78,7 +78,7 @@ def args_lambda_gen(reg_fn: typing.Callable, *fixed_args) -> typing.Callable:
     )
 
 
-def idx_regs_to_regmap(regmap: list, reglist: list, read_fn, write_fn) -> None:
+def idx_regs_to_regmap(regmap: dict, reglist: list, read_fn, write_fn) -> None:
     for idx, offset in enumerate(reglist):
         regmap[offset] = [
             args_lambda_gen(read_fn, idx),
@@ -86,7 +86,7 @@ def idx_regs_to_regmap(regmap: list, reglist: list, read_fn, write_fn) -> None:
         ]
 
 
-def armv7m_find_instruction_size(ucmutex: UcMutex, address: int):
+def armv7m_find_instruction_size(ucmutex: UcMutex, address: int) -> int:
     """Find the instruction length of an instruction from it's address.
 
     Based on the armv7m Cortex-M3 spec, we are using Thumb-2. Therefore,
@@ -100,21 +100,21 @@ def armv7m_find_instruction_size(ucmutex: UcMutex, address: int):
         return 2
 
 
-def write_u32_to_sp(ucmutex: UcMutex, val: int):
+def write_u32_to_sp(ucmutex: UcMutex, val: int) -> None:
     new_sp = ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_SP) - 4
     ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_SP, new_sp)
 
     ucmutex.mem_write(new_sp, val.to_bytes(4, "little"))
 
 
-def read_u32_from_sp(ucmutex: UcMutex, sp_type: int):
+def read_u32_from_sp(ucmutex: UcMutex, sp_type: int) -> int:
     sp = ucmutex.reg_read(sp_type)
     val = ucmutex.int32_mem_read(sp)
     ucmutex.reg_write(sp_type, sp + 4)
     return val
 
 
-def pattern_list_gen(starting_offset, indexes, step=4):
+def pattern_list_gen(starting_offset, indexes, step=4) -> list:
     temp = []
     for index in range(indexes):
         temp.append(starting_offset + (index * step))
@@ -132,7 +132,7 @@ def halt_emulation(uc: qemu.Uc, ucthread: UcThread) -> None:
     ucthread.emu_halt()
 
 
-def extract_max_number(v, current_max=None):
+def extract_max_number(v, current_max: typing.Any = None) -> int:
     """
     Extract max numerical value from a int/float/list/dict object.
     This is useful for creating the most memory efficient lists for list based

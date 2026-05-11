@@ -92,7 +92,7 @@ class GscemuLogger:
                 .f_code.co_filename  # Get the filename in the caller's frame
             )
 
-    def _formatted_print(self, type, *args, **kwargs) -> None:
+    def _formatted_print(self, type: str, *args, **kwargs) -> bool:
         """Print a special formatted print string based on the print type."""
 
         # This chunk of code assumes that _PRINT_COLOR has all the supported
@@ -102,7 +102,7 @@ class GscemuLogger:
             # This is a print to the dev that the logger was implemented
             # wrongly. This should honestly never happen, but redundancy!
             print("Formatted print failed.")
-            return
+            return False
 
         print(
             colored_text(f"{type}[", _PRINT_COLOR[type])
@@ -111,6 +111,8 @@ class GscemuLogger:
             *args,
             **kwargs,
         )
+
+        return True
 
     def debug(self, *args, **kwargs) -> bool:
         """Print a string with "DEBUG[xxx.py]: {your_string}".

@@ -36,29 +36,31 @@ class ARMSoftwareDebugPort:
         self.build_time = 0x0
         self.p4_last_sync = 0x0
 
-    def read_build_date(self, size: int):
+    def read_build_date(self, size: int) -> int:
         with self.opmutex:
             return self.build_date
 
-    def write_build_date(self, size: int, value: int):
+    def write_build_date(self, size: int, value: int) -> None:
         return
 
-    def read_build_time(self, size: int):
+    def read_build_time(self, size: int) -> int:
         with self.opmutex:
             return self.build_time
 
-    def write_build_time(self, size: int, value: int):
+    def write_build_time(self, size: int, value: int) -> None:
         return
 
-    def read_p4_last_sync(self, size: int):
+    def read_p4_last_sync(self, size: int) -> int:
         with self.opmutex:
             return self.p4_last_sync
 
-    def write_p4_last_sync(self, size: int, value: int):
+    def write_p4_last_sync(self, size: int, value: int) -> None:
         return
 
 
-def init_ARMSoftwareDebugPort(ctx: EmulatorContext, regs: dict):
+def init_ARMSoftwareDebugPort(
+    ctx: EmulatorContext, regs: dict
+) -> ComponentObjects:
     c_emu = ARMSoftwareDebugPort(ctx)
 
     reg_fn_map = {
@@ -72,7 +74,7 @@ def init_ARMSoftwareDebugPort(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return reg_fn_map[offset][0](size)
         except KeyError:

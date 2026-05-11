@@ -40,7 +40,7 @@ _EXC_RETURN_VALS = [0xFFFFFFF1, 0xFFFFFFF9, 0xFFFFFFFD]
 
 
 class ArmInterruptHandler:
-    def __init__(self, arm_cpu):
+    def __init__(self, arm_cpu: ArmSC300):
         # We need this to read the VTOR addr for interrupts.
         self.cpu = arm_cpu
         self.ctx = self.cpu.ctx
@@ -77,7 +77,7 @@ class ArmInterruptHandler:
         self.intr_ctx_increment_pc = False
         self.external_interrupt_pending = threading.Event()
 
-    def m3_intr_worker(self):
+    def m3_intr_worker(self) -> None:
         while True:
             try:
                 target_fn, ctx_ipc, args = self.intr_queue.get()
@@ -136,7 +136,7 @@ class ArmInterruptHandler:
 
     def queue_internal_write_worker_op(
         self, size: int, value: int, target_fn: typing.Callable
-    ):
+    ) -> None:
         self.intr_queue.put(
             [
                 target_fn,
@@ -166,22 +166,22 @@ class ArmInterruptHandler:
         )
         self.intr_queue.join()
 
-    def queue_unsafe_pend_external_irq(self) -> None:
+    def queue_unsafe_pend_external_irq(self, irq: int) -> None:
         self.intr_queue.put(
             [
                 self.unsafe_pend_external_irq,
                 False,  # increment_pc
-                tuple(),
+                (irq,),
             ]
         )
         self.intr_queue.join()
 
-    def queue_unsafe_unpend_external_irq(self) -> None:
+    def queue_unsafe_unpend_external_irq(self, irq: int) -> None:
         self.intr_queue.put(
             [
                 self.unsafe_unpend_external_irq,
                 False,  # increment_pc
-                tuple(),
+                (irq,),
             ]
         )
         self.intr_queue.join()
@@ -237,25 +237,25 @@ class ArmInterruptHandler:
 
         self.nvic_sys_pend[11 - 1] = True
 
-    def pend_external_irq(self, irq) -> None:
+    def pend_external_irq(self, irq: int) -> None:
         with self.nvic_pend_lock:
             self.nvic_pend[irq] = True
         self.external_interrupt_pending.set()
 
-    def unpend_external_irq(self, irq) -> None:
+    def unpend_external_irq(self, irq: int) -> None:
         with self.nvic_pend_lock:
             self.nvic_pend[irq] = False
         self.external_interrupt_pending.set()
 
-    def unsafe_pend_external_irq(self, irq) -> None:
+    def unsafe_pend_external_irq(self, irq: int) -> None:
         with self.nvic_pend_lock:
             self.nvic_pend[irq] = True
 
-    def unsafe_unpend_external_irq(self, irq) -> None:
+    def unsafe_unpend_external_irq(self, irq: int) -> None:
         with self.nvic_pend_lock:
             self.nvic_pend[irq] = False
 
-    def unsafe_pend_sysintr(self, intr) -> None:
+    def unsafe_pend_sysintr(self, intr: int) -> None:
         self.nvic_sys_pend[intr - 1] = True
 
     def wait_for_interrupt(self) -> None:
@@ -280,6 +280,7 @@ class ArmInterruptHandler:
             sp_type = qemu.arm_const.UC_ARM_REG_PSP
         else:
             prints.fatal(f"EXC_RETURN invalid pc=0x{address:x}")
+            return
 
         if self.ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_IPSR) != 2:
             self.ctx.ucmutex.reg_write(qemu.arm_const.UC_ARM_REG_FAULTMASK, 0)
@@ -338,7 +339,7 @@ class ArmInterruptHandler:
                     continue
                 pending_exceptions[irq + 16] = self.nvic_pri[irq]
 
-    def get_current_exception_priority(self) -> bool:
+    def get_current_exception_priority(self) -> int:
         current_exc_num = self.ctx.uc.reg_read(qemu.arm_const.UC_ARM_REG_IPSR)
 
         if current_exc_num:
@@ -439,9 +440,11 @@ class ArmInterruptHandler:
             if current_sp == "msp":
                 built_exc_return = _EXC_RETURN_VALS[0]
             elif current_sp == "psp":
-                prints.fatal_exit(
+                prints.fatal(
                     "impossible handler+psp case for EXC_RETURN!!!"
                 )
+                # What do we do here? Should we even continue execution?
+                return
 
         # Push the exception frame to the stack
         for reg in [
@@ -601,7 +604,7 @@ class ArmSC300:
         with self.mutex:
             self.cyccnt_time_start = time.perf_counter_ns()
 
-    def read_mmfs(self, size: int) -> None:
+    def read_mmfs(self, size: int) -> int:
         with self.mutex:
             return self.mmfs
 
@@ -609,7 +612,7 @@ class ArmSC300:
         with self.mutex:
             self.mmfs = value
 
-    def read_bfar(self, size: int) -> None:
+    def read_bfar(self, size: int) -> int:
         with self.mutex:
             return self.bfar
 
@@ -617,7 +620,7 @@ class ArmSC300:
         with self.mutex:
             self.bfar = value
 
-    def read_mfar(self, size: int) -> None:
+    def read_mfar(self, size: int) -> int:
         with self.mutex:
             return self.mfar
 
@@ -625,7 +628,7 @@ class ArmSC300:
         with self.mutex:
             self.mfar = value
 
-    def read_hfsr(self, size: int) -> None:
+    def read_hfsr(self, size: int) -> int:
         with self.mutex:
             return self.hfsr
 
@@ -633,7 +636,7 @@ class ArmSC300:
         with self.mutex:
             self.hfsr = value
 
-    def read_dfsr(self, size: int) -> None:
+    def read_dfsr(self, size: int) -> int:
         with self.mutex:
             return self.dfsr
 
@@ -641,7 +644,7 @@ class ArmSC300:
         with self.mutex:
             self.dfsr = value
 
-    def read_demcr(self, size: int) -> None:
+    def read_demcr(self, size: int) -> int:
         with self.mutex:
             return self.demcr
 
@@ -649,7 +652,7 @@ class ArmSC300:
         with self.mutex:
             self.demcr = value
 
-    def read_dwt_ctrl(self, size: int) -> None:
+    def read_dwt_ctrl(self, size: int) -> int:
         with self.mutex:
             return self.dwt_ctrl
 
@@ -657,14 +660,14 @@ class ArmSC300:
         with self.mutex:
             self.dwt_ctrl = value
 
-    def read_cpuid(self, size: int) -> None:
+    def read_cpuid(self, size: int) -> int:
         with self.mutex:
             return self.cpuid
 
     def write_cpuid(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "M3", "CPUID")
 
-    def read_vtor(self, size: int) -> None:
+    def read_vtor(self, size: int) -> int:
         with self.mutex:
             return self.vtor
 
@@ -672,7 +675,7 @@ class ArmSC300:
         with self.mutex:
             self.vtor = value
 
-    def read_shscr(self, size: int) -> None:
+    def read_shscr(self, size: int) -> int:
         with self.mutex:
             return self.shscr
 
@@ -680,7 +683,7 @@ class ArmSC300:
         with self.mutex:
             self.shscr = value
 
-    def read_ccr(self, size: int) -> None:
+    def read_ccr(self, size: int) -> int:
         with self.mutex:
             return self.ccr
 
@@ -688,7 +691,7 @@ class ArmSC300:
         with self.mutex:
             self.ccr = value
 
-    def read_itcmcr(self, size: int) -> None:
+    def read_itcmcr(self, size: int) -> int:
         with self.mutex:
             return self.itcmcr
 
@@ -697,7 +700,7 @@ class ArmSC300:
             # It is unknown why ITCMCR returns 7. We need to figure it out.
             self.itcmcr = 7
 
-    def read_dwt_cyccnt(self, size: int) -> None:
+    def read_dwt_cyccnt(self, size: int) -> int:
         with self.mutex:
             val = int(
                 (time.perf_counter_ns() - self.cyccnt_time_start)
@@ -709,7 +712,7 @@ class ArmSC300:
         unhandled_register_io(prints, "WRITE", "M3", "DWT_CYCCNT")
 
 
-def init_ArmSC300(ctx: EmulatorContext, regs: dict):
+def init_ArmSC300(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = ArmSC300(ctx)
 
     reg_fn_map = {
@@ -768,7 +771,7 @@ def init_ArmSC300(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return reg_fn_map[offset][0](size)
         except KeyError:

@@ -19,7 +19,7 @@ class FifoLock:
         self._lock = threading.Lock()
         self._waiters = collections.deque()
 
-    def acquire(self):
+    def acquire(self) -> None:
         cv = threading.Condition(self._lock)
 
         with self._lock:
@@ -28,7 +28,7 @@ class FifoLock:
             while len(self._waiters) > 0 and self._waiters[0] is not cv:
                 cv.wait()
 
-    def release(self):
+    def release(self) -> None:
         with self._lock:
             if self._waiters:
                 self._waiters.popleft()
@@ -58,32 +58,32 @@ class UcMutex:
         self.uc = uc
         self.mutex = FifoLock()
 
-    def reg_read(self, *args, **kwargs):
+    def reg_read(self, *args, **kwargs) -> int:
         with self.mutex:
             return self.uc.reg_read(*args, **kwargs)
 
-    def reg_write(self, *args, **kwargs):
+    def reg_write(self, *args, **kwargs) -> None:
         with self.mutex:
             return self.uc.reg_write(*args, **kwargs)
 
-    def mem_read(self, *args, **kwargs):
+    def mem_read(self, *args, **kwargs) -> bytearray:
         with self.mutex:
             return self.uc.mem_read(*args, **kwargs)
 
-    def mem_write(self, *args, **kwargs):
+    def mem_write(self, *args, **kwargs) -> None:
         with self.mutex:
             return self.uc.mem_write(*args, **kwargs)
 
     # Non-standard helpers.
 
-    def int32_mem_read(self, address):
+    def int32_mem_read(self, address) -> int:
         with self.mutex:
             return int.from_bytes(self.uc.mem_read(address, 4), "little")
 
-    def int32_mem_write(self, address, val):
+    def int32_mem_write(self, address, val) -> None:
         with self.mutex:
             return self.uc.mem_write(address, int.to_bytes(val, 4, "little"))
 
-    def int16_mem_read(self, address):
+    def int16_mem_read(self, address) -> int:
         with self.mutex:
             return int.from_bytes(self.uc.mem_read(address, 2), "little")

@@ -23,7 +23,7 @@ class ComponentObjects:
 
 
 class EmulatorContext:
-    def __init__(self, uc: qemu.Uc = None):
+    def __init__(self, uc: qemu.Uc):
         if uc is None:
             raise ValueError("uc cannot be empty!")
 

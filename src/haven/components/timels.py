@@ -80,7 +80,7 @@ class LowSpeedTimer:
 
         self.timers = [TimerState(0), TimerState(1)]
 
-    def timels_worker(self):
+    def timels_worker(self) -> None:
         while True:
             try:
                 op = self.opqueue.get()
@@ -93,7 +93,7 @@ class LowSpeedTimer:
             except Exception as e:
                 prints.fatal(e)
 
-    def timer_watchdog(self):
+    def timer_watchdog(self) -> None:
         """Watchdog thread that monitors timers and triggers interrupts.
 
         This thread wakes up periodically or when signaled to check if any
@@ -132,7 +132,7 @@ class LowSpeedTimer:
                         if timer.ier:
                             pend_external_irq(self.ctx.c_fast.m3, timer.irq)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.timels_worker)
             self.opthread.daemon = True
@@ -336,7 +336,7 @@ class LowSpeedTimer:
         self.watchdog_check.set()
 
 
-def init_LowSpeedTimer(ctx: EmulatorContext, regs: dict):
+def init_LowSpeedTimer(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = LowSpeedTimer(ctx)
     c_emu.start_worker()
 
@@ -382,7 +382,7 @@ def init_LowSpeedTimer(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:

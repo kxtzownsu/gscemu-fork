@@ -66,7 +66,7 @@ def mem_invalid_access(
     return True
 
 
-def intr_hook(uc: qemu.Uc, intno: int, user_data: EmulatorContext):
+def intr_hook(uc: qemu.Uc, intno: int, user_data: EmulatorContext) -> bool:
     ctx = user_data
 
     if intno == 2:
@@ -83,7 +83,7 @@ def intr_hook(uc: qemu.Uc, intno: int, user_data: EmulatorContext):
     return True
 
 
-def handle_wfi_instruction(uc: qemu.Uc, user_data: EmulatorContext):
+def handle_wfi_instruction(uc: qemu.Uc, user_data: EmulatorContext) -> bool:
     ctx = user_data
 
     # Wait until an interrupt is externally pended from an external source.
@@ -110,6 +110,7 @@ def pc_logger(
 ) -> bool:
     user_data.write(f"{hex(address)}\n")
     user_data.flush()
+    return True
 
 
 def blank_tick_hook(

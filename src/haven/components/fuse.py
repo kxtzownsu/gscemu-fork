@@ -12,7 +12,7 @@ from lib.logger import GscemuLogger
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 
-def init_eFuses(ctx: EmulatorContext, fuse_const: dict):
+def init_eFuses(ctx: EmulatorContext, fuse_const: dict) -> ComponentObjects:
     def component_read_handler(
         uc_unused: qemu.Uc, offset: int, size: int, user_data: typing.Any
     ) -> int:

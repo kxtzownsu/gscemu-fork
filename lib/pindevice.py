@@ -59,7 +59,7 @@ class PinDevice:
         self,
         interrupt_fn: typing.Callable[
             [PinStatus, PinStatus, typing.Any], None
-        ] = None,
+        ] | None = None,
         interrupt_fn_userdata: typing.Any | None = None,
     ):
         self.lock = FifoLock()
@@ -74,8 +74,12 @@ class PinDevice:
         # The PinInfo that this device exerts onto components that it drives and
         # on itself.
         self.device_pininfo: PinInfo = PinInfo()
-        self.device_pininfo_external: dict[str, PinInfo] = dict()
 
+        # List of external PinDevices driving us.
+        self.device_pindevice_external: dict[str, PinDevice] = dict()
+
+        # The combined PinInfo of external PinDevices' PinInfos that are driving
+        # us and our own PinInfo
         self.combined_device_pininfo: PinInfo = PinInfo()
 
         # Factor in the device_pininfo PinInfo from the component driving us
@@ -94,7 +98,7 @@ class PinDevice:
 
     def _update_balanced_pininfo(
         self, new_pinstate: PinStatus, resistance: float | int
-    ):
+    ) -> None:
         # THIS SHOULD NOT BE CALLED WITHOUT A LOCK!!
         current_pinstate = self.balanced_pininfo.pinstate
         if current_pinstate != new_pinstate:
@@ -111,11 +115,11 @@ class PinDevice:
 
     def _update_combined_device_pininfo(
         self, new_pinstate: PinStatus, resistance: float | int
-    ):
+    ) -> None:
         self.combined_device_pininfo.pinstate = new_pinstate
         self.combined_device_pininfo.resistance_ohms = resistance
 
-    def drive_by_component(self, driver: PinDevice):
+    def drive_by_component(self, driver: PinDevice) -> None:
         # Someone will drive us.
         with self.lock:
             if self.driving_me:
@@ -130,7 +134,7 @@ class PinDevice:
 
         self.pininfo_sync()
 
-    def disconnect_driver(self):
+    def disconnect_driver(self) -> None:
         with self.lock:
             if self.driving_me:
                 with self.driving_me.lock:
@@ -142,41 +146,44 @@ class PinDevice:
 
         self.pininfo_sync()
 
-    def add_external_drive_by_component(self, tag: str, driver: PinDevice):
+    def add_external_drive_by_component(
+        self, tag: str, driver: PinDevice
+    ) -> None:
         with self.lock:
-            if self.device_pininfo_external.get(tag):
-                with self.device_pininfo_external[tag].lock:
+            if self.device_pindevice_external.get(tag):
+                with self.device_pindevice_external[tag].lock:
                     # We should not KeyError, it is impossible.
                     # If it happens then we should catch it!
-                    self.device_pininfo_external[tag].driving_components.remove(
+                    self.device_pindevice_external[tag].driving_components.remove(
                         self
                     )
 
-            self.device_pininfo_external[tag] = driver
-            with self.device_pininfo_external[tag].lock:
+            # TODO(appleflyer): this is a mess, to fix.
+            self.device_pindevice_external[tag] = driver
+            with self.device_pindevice_external[tag].lock:
                 driver.driving_components.add(self)
 
         self.pininfo_sync_device_pininfo()
         self.pininfo_sync()
 
-    def disconnect_external_driver(self, tag: str):
+    def disconnect_external_driver(self, tag: str) -> None:
         with self.lock:
-            if self.device_pininfo_external.get(tag):
-                with self.device_pininfo_external[tag].lock:
+            if self.device_pindevice_external.get(tag):
+                with self.device_pindevice_external[tag].lock:
                     # We should not KeyError, it is impossible.
                     # If it happens then we should catch it!
-                    self.device_pininfo_external[tag].driving_components.remove(
+                    self.device_pindevice_external[tag].driving_components.remove(
                         self
                     )
 
-                self.device_pininfo_external.pop(tag)
+                self.device_pindevice_external.pop(tag)
 
         self.pininfo_sync_device_pininfo()
         self.pininfo_sync()
 
     def balance_pininfo(
         self, pininfos: list[PinInfo], update_fn: typing.Callable
-    ):
+    ) -> None:
         # THIS SHOULD NOT BE CALLED WITHOUT A LOCK!!
         pullups = []
         pulldowns = []
@@ -219,7 +226,7 @@ class PinDevice:
             prints.warning("ru == rd!! PinStatus set to FLOATING!!")
             update_fn(PinStatus.FLOATING, 0.0)
 
-    def set_pininfo(self, pdpu: PinStatus, resistance: int | float):
+    def set_pininfo(self, pdpu: PinStatus, resistance: int | float) -> None:
         # This function is used to update the pd/pu on the pin
         # itself. If other components are driving us, then the updated value
         # would be in self.balanced_pininfo. But we need the device_pininfo
@@ -233,7 +240,7 @@ class PinDevice:
         self.pininfo_sync_device_pininfo()
         self.pininfo_sync()
 
-    def mask_pininfo(self, en: bool):
+    def mask_pininfo(self, en: bool) -> None:
         # A convenience function to mask the pininfo value. This is needed when
         # e.g. GPIO needs to disable a pin's output.
         with self.lock:
@@ -249,16 +256,16 @@ class PinDevice:
         with self.lock:
             return self.balanced_pininfo.resistance_ohms
 
-    def pininfo_sync_device_pininfo(self):
+    def pininfo_sync_device_pininfo(self) -> None:
         with self.lock:
             pininfos = []
             pininfos.append(self.device_pininfo)
-            for v in self.device_pininfo_external.values():
+            for v in self.device_pindevice_external.values():
                 pininfos.append(v.combined_device_pininfo)
 
             self.balance_pininfo(pininfos, self._update_combined_device_pininfo)
 
-    def pininfo_sync(self, visited: set | None = None):
+    def pininfo_sync(self, visited: set | None = None) -> None:
         if visited is None:
             visited = set()
         if self in visited:

@@ -125,7 +125,7 @@ class HavenGlobalsec:
             for _ in range(3)
         ]
 
-    def read_alert_cfg_lock(self, size: int) -> None:
+    def read_alert_cfg_lock(self, size: int) -> int:
         with self.mutex:
             return self.alert_cfg_lock
 
@@ -133,7 +133,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_cfg_lock = value
 
-    def read_alert_fw_trigger(self, size: int) -> None:
+    def read_alert_fw_trigger(self, size: int) -> int:
         with self.mutex:
             return self.alert_fw_trigger
 
@@ -141,7 +141,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_fw_trigger = value
 
-    def read_alert_control(self, size: int) -> None:
+    def read_alert_control(self, size: int) -> int:
         with self.mutex:
             return self.alert_control
 
@@ -149,7 +149,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_control = value
 
-    def read_alert_intr_sts(self, size: int, index: int) -> None:
+    def read_alert_intr_sts(self, size: int, index: int) -> int:
         with self.mutex:
             return self.alert_intr_sts[index]
 
@@ -157,7 +157,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_intr_sts[index] = value
 
-    def read_alert_nmi_en(self, size: int, index: int) -> None:
+    def read_alert_nmi_en(self, size: int, index: int) -> int:
         with self.mutex:
             return self.alert_nmi_en[index]
 
@@ -165,7 +165,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_nmi_en[index] = value
 
-    def read_alert_dlyctr_base(self, size: int, index: int) -> None:
+    def read_alert_dlyctr_base(self, size: int, index: int) -> int:
         with self.mutex:
             return self.alert_dlyctr[index]["BASE"]
 
@@ -175,7 +175,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_dlyctr[index]["BASE"] = value
 
-    def read_alert_dlyctr_len(self, size: int, index: int) -> None:
+    def read_alert_dlyctr_len(self, size: int, index: int) -> int:
         with self.mutex:
             return self.alert_dlyctr[index]["LEN"]
 
@@ -185,7 +185,7 @@ class HavenGlobalsec:
 
     def read_alert_dlyctr_en(
         self, size: int, index: int, en_index: int
-    ) -> None:
+    ) -> int:
         with self.mutex:
             return self.alert_dlyctr[index]["EN"][en_index]
 
@@ -195,7 +195,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_dlyctr[index]["EN"][en_index] = value
 
-    def read_alert_dlyctr_shutdown_en(self, size: int, index: int) -> None:
+    def read_alert_dlyctr_shutdown_en(self, size: int, index: int) -> int:
         with self.mutex:
             return self.alert_dlyctr[index]["SHUTDOWN_EN"]
 
@@ -205,7 +205,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_dlyctr[index]["SHUTDOWN_EN"] = value
 
-    def read_alert_dlyctr_clear(self, size: int, index: int) -> None:
+    def read_alert_dlyctr_clear(self, size: int, index: int) -> int:
         with self.mutex:
             return self.alert_dlyctr[index]["CLEAR"]
 
@@ -215,7 +215,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_dlyctr[index]["CLEAR"] = value
 
-    def read_alert_group_en(self, size: int, index: int, en_index: int) -> None:
+    def read_alert_group_en(self, size: int, index: int, en_index: int) -> int:
         with self.mutex:
             return self.alert_group[index]["EN"][en_index]
 
@@ -225,7 +225,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_group[index]["EN"][en_index] = value
 
-    def read_alert_group_ctr(self, size: int, index: int) -> None:
+    def read_alert_group_ctr(self, size: int, index: int) -> int:
         with self.mutex:
             return self.alert_group[index]["CTR"]
 
@@ -233,7 +233,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.alert_group[index]["CTR"] = value
 
-    def read_alert_group_threshold(self, size: int, index: int) -> None:
+    def read_alert_group_threshold(self, size: int, index: int) -> int:
         with self.mutex:
             return self.alert_group[index]["THRESHOLD"]
 
@@ -260,7 +260,7 @@ class HavenGlobalsec:
 
         self.permission_runlevel[reg_offset] = curr_runlevel
 
-    def read_permission_runlevel(self, size: int, reg_offset: int) -> None:
+    def read_permission_runlevel(self, size: int, reg_offset: int) -> int:
         with self.mutex:
             return self.permission_runlevel[reg_offset]
 
@@ -270,7 +270,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.decrement_permission_runlevel(reg_offset)
 
-    def read_dummykey(self, size: int, index: int) -> None:
+    def read_dummykey(self, size: int, index: int) -> int:
         with self.mutex:
             return self.dummykey[index]
 
@@ -278,14 +278,14 @@ class HavenGlobalsec:
         with self.mutex:
             self.dummykey[index] = value
 
-    def read_sb_comp_status(self, size: int) -> None:
+    def read_sb_comp_status(self, size: int) -> int:
         with self.mutex:
             return int(self.sb_comp_status)
 
     def write_sb_comp_status(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "GLOBALSEC", "SB_COMP_STATUS")
 
-    def read_sb_bl_sig(self, size: int, index: int) -> None:
+    def read_sb_bl_sig(self, size: int, index: int) -> int:
         # We know that on a Cr50, reading from SB_BL_SIG returns a 0xfacecafe
         with self.mutex:
             return 0xFACECAFE
@@ -294,7 +294,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.sb_bl_sig[index] = value
 
-    def read_sig_unlock(self, size: int) -> None:
+    def read_sig_unlock(self, size: int) -> int:
         unhandled_register_io(prints, "READ", "GLOBALSEC", "SIG_UNLOCK")
         return 0
 
@@ -310,7 +310,7 @@ class HavenGlobalsec:
             else:
                 self.sb_comp_status = False
 
-    def read_dbg_control(self, size: int) -> None:
+    def read_dbg_control(self, size: int) -> int:
         with self.mutex:
             return self.dbg_control
 
@@ -318,7 +318,7 @@ class HavenGlobalsec:
         with self.mutex:
             self.dbg_control = value
 
-    def read_hide_rom(self, size: int) -> None:
+    def read_hide_rom(self, size: int) -> int:
         with self.mutex:
             return self.hide_rom
 
@@ -330,7 +330,7 @@ class HavenGlobalsec:
                 return
             self.hide_rom = value
 
-    def read_obfs_sw_en(self, size: int) -> None:
+    def read_obfs_sw_en(self, size: int) -> int:
         with self.mutex:
             return self.obfs_sw_en
 
@@ -339,7 +339,7 @@ class HavenGlobalsec:
 
     def read_region_register(
         self, size: int, reg_type: str, bus_master: str, index: int
-    ) -> None:
+    ) -> int:
         with self.mutex:
             if reg_type == "ctrl":
                 value = self.region_ctrl[bus_master][index]
@@ -365,7 +365,7 @@ class HavenGlobalsec:
                 self.region_size[bus_master][index] = value
 
 
-def init_HavenGlobalsec(ctx: EmulatorContext, regs: dict):
+def init_HavenGlobalsec(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = HavenGlobalsec(ctx, regs)
 
     reg_fn_map = {
@@ -490,7 +490,7 @@ def init_HavenGlobalsec(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc_unused: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return reg_fn_map[offset][0](size)
         except KeyError:

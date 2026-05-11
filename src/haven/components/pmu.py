@@ -55,7 +55,7 @@ class PowerManagementUnit:
         # Enabled or disabled by default?
         self.rst_wr_en = [True] * 2
 
-    def pmu_worker(self):
+    def pmu_worker(self) -> None:
         while True:
             try:
                 op = self.opqueue.get()
@@ -68,22 +68,22 @@ class PowerManagementUnit:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.pmu_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
-    def read_periclkset0(self, size: int, queue: queue.Queue):
+    def read_periclkset0(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(32):
             if self.periph_clocks_en[bit]:
@@ -91,7 +91,7 @@ class PowerManagementUnit:
 
         queue.put(val)
 
-    def write_periclkset0(self, size: int, value: int):
+    def write_periclkset0(self, size: int, value: int) -> None:
         for bit in range(32):
             if self.periph_clocks_en[bit]:
                 continue
@@ -99,7 +99,7 @@ class PowerManagementUnit:
             if value & (1 << bit):
                 self.periph_clocks_en[bit] = True
 
-    def read_periclkclr0(self, size: int, queue: queue.Queue):
+    def read_periclkclr0(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(32):
             if self.periph_clocks_en[bit]:
@@ -107,7 +107,7 @@ class PowerManagementUnit:
 
         queue.put(val)
 
-    def write_periclkclr0(self, size: int, value: int):
+    def write_periclkclr0(self, size: int, value: int) -> None:
         for bit in range(32):
             if not self.periph_clocks_en[bit]:
                 continue
@@ -115,7 +115,7 @@ class PowerManagementUnit:
             if value & (1 << bit):
                 self.periph_clocks_en[bit] = False
 
-    def read_periclkset1(self, size: int, queue: queue.Queue):
+    def read_periclkset1(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             if self.periph_clocks_en[bit + 32]:
@@ -123,7 +123,7 @@ class PowerManagementUnit:
 
         queue.put(val)
 
-    def write_periclkset1(self, size: int, value: int):
+    def write_periclkset1(self, size: int, value: int) -> None:
         for bit in range(16):
             if self.periph_clocks_en[bit + 32]:
                 continue
@@ -131,7 +131,7 @@ class PowerManagementUnit:
             if value & (1 << bit):
                 self.periph_clocks_en[bit + 32] = True
 
-    def read_periclkclr1(self, size: int, queue: queue.Queue):
+    def read_periclkclr1(self, size: int, queue: queue.Queue) -> None:
         val = 0
         for bit in range(16):
             if self.periph_clocks_en[bit + 32]:
@@ -139,7 +139,7 @@ class PowerManagementUnit:
 
         queue.put(val)
 
-    def write_periclkclr1(self, size: int, value: int):
+    def write_periclkclr1(self, size: int, value: int) -> None:
         for bit in range(16):
             if not self.periph_clocks_en[bit + 32]:
                 continue
@@ -147,7 +147,7 @@ class PowerManagementUnit:
             if value & (1 << bit):
                 self.periph_clocks_en[bit + 32] = False
 
-    def read_chip_id(self, size: int, queue: queue.Queue):
+    def read_chip_id(self, size: int, queue: queue.Queue) -> None:
         val = 0
         val |= self.chip_id["JTAG_STANDARD"] & 0x1
         val |= (self.chip_id["MFG_ID"] << 1) & 0xFFE
@@ -156,37 +156,41 @@ class PowerManagementUnit:
 
         queue.put(val)
 
-    def write_chip_id(self, size: int, value: int):
+    def write_chip_id(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "PMU", "CHIP_ID")
 
-    def read_low_power_dis(self, size: int, queue: queue.Queue):
+    def read_low_power_dis(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.low_power_seq)
 
-    def write_low_power_dis(self, size: int, value: int):
+    def write_low_power_dis(self, size: int, value: int) -> None:
         self.low_power_seq = value
 
-    def read_exitpd_mask(self, size: int, queue: queue.Queue):
+    def read_exitpd_mask(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.exitpd_mask)
 
-    def write_exitpd_mask(self, size: int, value: int):
+    def write_exitpd_mask(self, size: int, value: int) -> None:
         self.exitpd_mask = value
 
-    def read_sw_pdb(self, size: int, queue: queue.Queue):
+    def read_sw_pdb(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.sw_pdb)
 
-    def write_sw_pdb(self, size: int, value: int):
+    def write_sw_pdb(self, size: int, value: int) -> None:
         self.sw_pdb = value
 
-    def read_int_enable(self, size: int, queue: queue.Queue):
+    def read_int_enable(self, size: int, queue: queue.Queue) -> None:
         queue.put(int(self.int_enable))
 
-    def write_int_enable(self, size: int, value: int):
+    def write_int_enable(self, size: int, value: int) -> None:
         self.int_enable = bool(value)
 
-    def read_pwrdn_scratch(self, size: int, queue: queue.Queue, index: int):
+    def read_pwrdn_scratch(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         queue.put(self.pwrdn_scratch[index])
 
-    def write_pwrdn_scratch(self, size: int, value: int, index: int):
+    def write_pwrdn_scratch(
+        self, size: int, value: int, index: int
+    ) -> None:
         if 0 <= index <= 7:
             if self.pwrdn_scratch_lock[0]:
                 return
@@ -199,31 +203,33 @@ class PowerManagementUnit:
 
     def read_pwrdn_scratch_lock(
         self, size: int, queue: queue.Queue, index: int
-    ):
+    ) -> None:
         queue.put(int(self.pwrdn_scratch_lock[index]))
 
-    def write_pwrdn_scratch_lock(self, size: int, value: int, index: int):
+    def write_pwrdn_scratch_lock(
+        self, size: int, value: int, index: int
+    ) -> None:
         if value:
             self.pwrdn_scratch_lock[index] = True
 
-    def read_rstsrc(self, size: int, queue: queue.Queue):
+    def read_rstsrc(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.rstsrc)
 
-    def write_rstsrc(self, size: int, value: int):
+    def write_rstsrc(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "PMU", "RSTSRC")
 
-    def read_clrrst(self, size: int, queue: queue.Queue):
+    def read_clrrst(self, size: int, queue: queue.Queue) -> None:
         unhandled_register_io(prints, "READ", "PMU", "CLRRST")
         queue.put(0)
 
-    def write_clrrst(self, size: int, value: int):
+    def write_clrrst(self, size: int, value: int) -> None:
         if value:
             self.rstsrc = 0
 
-    def read_rst(self, size: int, queue: queue.Queue, index: int):
+    def read_rst(self, size: int, queue: queue.Queue, index: int) -> None:
         queue.put(0)
 
-    def write_rst(self, size: int, value: int, index: int):
+    def write_rst(self, size: int, value: int, index: int) -> None:
         # Implement component resetting.
         if self.rst_wr_en[index]:
             # Reset here
@@ -231,20 +237,30 @@ class PowerManagementUnit:
 
         return
 
-    def read_rst_wr_en(self, size: int, queue: queue.Queue, index: int):
+    def read_rst_wr_en(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         queue.put(int(self.rst_wr_en[index]))
 
-    def write_rst_wr_en(self, size: int, value: int, index: int):
+    def write_rst_wr_en(
+        self, size: int, value: int, index: int
+    ) -> None:
         self.rst_wr_en[index] = bool(value)
 
-    def read_long_life_scratch(self, size: int, queue: queue.Queue, index: int):
+    def read_long_life_scratch(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         queue.put(self.long_life_scratch[index])
 
-    def write_long_life_scratch(self, size: int, value: int, index: int):
+    def write_long_life_scratch(
+        self, size: int, value: int, index: int
+    ) -> None:
         if self.long_life_scratch_wr_en[index]:
             self.long_life_scratch[index] = value
 
-    def read_long_life_scratch_wr_en(self, size: int, queue: queue.Queue):
+    def read_long_life_scratch_wr_en(
+        self, size: int, queue: queue.Queue
+    ) -> None:
         val = 0
         for bit in range(4):
             if self.long_life_scratch_wr_en[bit]:
@@ -252,7 +268,9 @@ class PowerManagementUnit:
 
         queue.put(val)
 
-    def write_long_life_scratch_wr_en(self, size: int, value: int):
+    def write_long_life_scratch_wr_en(
+        self, size: int, value: int
+    ) -> None:
         for bit in range(4):
             if value & (1 << bit):
                 self.long_life_scratch_wr_en[bit] = True
@@ -260,7 +278,9 @@ class PowerManagementUnit:
                 self.long_life_scratch_wr_en[bit] = False
 
 
-def init_PowerManagementUnit(ctx: EmulatorContext, regs: dict):
+def init_PowerManagementUnit(
+    ctx: EmulatorContext, regs: dict
+) -> ComponentObjects:
     c_emu = PowerManagementUnit(ctx)
     c_emu.start_worker()
 
@@ -317,7 +337,7 @@ def init_PowerManagementUnit(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:

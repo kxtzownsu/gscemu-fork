@@ -92,8 +92,10 @@ class Emulator:
 
         install_tpm_endorsement_certs(self.ctx)
 
-        init_strap_config(self.ctx.components["PINMUX"].object)
-        init_custom_board_pinmux_features(self.ctx.components["PINMUX"].object)
+        init_strap_config(self.ctx.components["PINMUX"].object) # type: ignore
+        init_custom_board_pinmux_features(
+            self.ctx.components["PINMUX"].object # type: ignore
+        )
 
         self.ctx.uc.hook_add(
             htype=qemu.UC_HOOK_INTR,

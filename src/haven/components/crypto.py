@@ -49,7 +49,7 @@ class CryptoAccelerator:
 
         self.dmem_mem = [0] * 128
 
-    def crypto_worker(self):
+    def crypto_worker(self) -> None:
         while True:
             try:
                 op = self.opqueue.get()
@@ -106,22 +106,22 @@ class CryptoAccelerator:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.crypto_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
-    def control_process(self):
+    def control_process(self) -> None:
         if self.control & 1:  # RESET
             self.clear_emulator_object()
 
@@ -136,14 +136,14 @@ class CryptoAccelerator:
         # At this point, the writes should have been processed.
         self.control = 0
 
-    def clear_emulator_object(self):
+    def clear_emulator_object(self) -> None:
         self.crypto_emulator = None
 
-    def read_control(self, size: int, queue: queue.Queue):
+    def read_control(self, size: int, queue: queue.Queue) -> None:
         # Should be zero everytime this is read anyways.
         queue.put(self.control)
 
-    def write_control(self, size: int, value: int):
+    def write_control(self, size: int, value: int) -> None:
         val = value & 7
 
         # Check if more than 1 bit set.
@@ -153,18 +153,18 @@ class CryptoAccelerator:
 
         self.control = val
 
-    def read_wipe_secrets(self, size: int, queue: queue.Queue):
+    def read_wipe_secrets(self, size: int, queue: queue.Queue) -> None:
         unhandled_register_io(prints, "READ", "CRYPTO", "WIPE_SECRETS")
         queue.put(0)
 
-    def write_wipe_secrets(self, size: int, value: int):
+    def write_wipe_secrets(self, size: int, value: int) -> None:
         if value:
             self.clear_emulator_object()
 
-    def read_imem(self, size: int, queue: queue.Queue, index: int):
+    def read_imem(self, size: int, queue: queue.Queue, index: int) -> None:
         queue.put(self.imem_mem[index])
 
-    def write_imem(self, size: int, value: int, index: int):
+    def write_imem(self, size: int, value: int, index: int) -> None:
         # Clear emulator state on IMEM write if emulator state has been
         # created?
         if self.crypto_emulator is not None:
@@ -189,7 +189,7 @@ class CryptoAccelerator:
         self.imem_mem[index] = value
         self.imem_assembled[index] = assembled
 
-    def read_dmem(self, size: int, queue: queue.Queue, index: int):
+    def read_dmem(self, size: int, queue: queue.Queue, index: int) -> None:
         element_idx = index // 8
         word_idx = index % 8
         bit_offset = word_idx * 32
@@ -202,7 +202,7 @@ class CryptoAccelerator:
         else:
             queue.put((self.dmem_mem[element_idx] >> bit_offset) & 0xFFFFFFFF)
 
-    def write_dmem(self, size: int, value: int, index: int):
+    def write_dmem(self, size: int, value: int, index: int) -> None:
         element_idx = index // 8
         word_idx = index % 8
         value = value & 0xFFFFFFFF
@@ -220,38 +220,40 @@ class CryptoAccelerator:
                 value << bit_offset
             )
 
-    def read_int_state(self, size: int, queue: queue.Queue):
+    def read_int_state(self, size: int, queue: queue.Queue) -> None:
         # Doesn't matter
         queue.put(0)
 
-    def write_int_state(self, size: int, value: int):
+    def write_int_state(self, size: int, value: int) -> None:
         if value & 0x2:
             unpend_external_irq(self.ctx.c_fast.m3, 4)
 
-    def read_int_enable(self, size: int, queue: queue.Queue):
+    def read_int_enable(self, size: int, queue: queue.Queue) -> None:
         # Doesn't matter
         queue.put(0)
 
-    def write_int_enable(self, size: int, value: int):
+    def write_int_enable(self, size: int, value: int) -> None:
         # Doesn't matter
         return
 
-    def read_rand_stall_ctl(self, size: int, queue: queue.Queue):
+    def read_rand_stall_ctl(self, size: int, queue: queue.Queue) -> None:
         # Doesn't matter
         queue.put(self.rand_stall_ctl)
 
-    def write_rand_stall_ctl(self, size: int, value: int):
+    def write_rand_stall_ctl(self, size: int, value: int) -> None:
         # Doesn't matter
         self.rand_stall_ctl = value
 
-    def read_host_cmd(self, size: int, queue: queue.Queue):
+    def read_host_cmd(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.host_cmd)
 
-    def write_host_cmd(self, size: int, value: int):
+    def write_host_cmd(self, size: int, value: int) -> None:
         self.host_cmd = value - 0x08000000
 
 
-def init_CryptoAccelerator(ctx: EmulatorContext, regs: dict):
+def init_CryptoAccelerator(
+    ctx: EmulatorContext, regs: dict
+) -> ComponentObjects:
     c_emu = CryptoAccelerator(ctx)
     c_emu.start_worker()
 
@@ -280,7 +282,7 @@ def init_CryptoAccelerator(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc_unused: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:

@@ -31,3 +31,24 @@ include = ["lib*", "src*", "fw*"]
 [tool.setuptools.package-data]
 "fw.rom" = ["*.rom"]
 "fw.haven" = ["*.bin"]
+
+[tool.basedpyright]
+typeCheckingMode = "basic"
+reportPrivateImportUsage = "none"
+reportAttributeAccessIssue = false # This must be disabled, some vars have dynamic types only assigned during runtime.
+reportOptionalMemberAccess = false
+
+# if we enable strict type checking, all these have to be disabled.
+# reportPrivateImportUsage = "none"
+# reportUnusedParameter = "none"
+# reportAny = "none"
+# reportUnusedCallResult = "none"
+# reportUnannotatedClassAttribute = "none"
+# reportUnknownVariableType = "none"
+# reportUnknownMemberType = "none"
+# reportUnknownParameterType = "none"
+# # reportUnknownArgumentType = "none"
+# reportUnknownLambdaType = "none"
+# reportUnnecessaryIsInstance = "none"
+# reportMissingTypeArgument = "none"
+# reportCallIssue = "none" # basedpyright does not resolve the lambda evals.

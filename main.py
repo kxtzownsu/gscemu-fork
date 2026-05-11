@@ -30,7 +30,7 @@ from src.haven import Emulator as havnEmulator
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 
-def stdout_emu_char_write_pts_callback(char: int, unused):
+def stdout_emu_char_write_pts_callback(char: int, unused) -> None:
     try:
         sys.stdout.write(chr(char))
         sys.stdout.flush()
@@ -38,7 +38,7 @@ def stdout_emu_char_write_pts_callback(char: int, unused):
         print(f"pty emu -> user error: {e}")
 
 
-def stdout_user_char_write_emu_thread(call_fn):
+def stdout_user_char_write_emu_thread(call_fn) -> None:
     while True:
         try:
             char = sys.stdin.read(1)
@@ -53,14 +53,14 @@ def stdout_user_char_write_emu_thread(call_fn):
             break
 
 
-def pts_emu_char_write_pts_callback(char: int, master_fd):
+def pts_emu_char_write_pts_callback(char: int, master_fd) -> None:
     try:
         os.write(master_fd, bytes([char]))
     except Exception as e:
         print(f"pty emu -> user error: {e}")
 
 
-def pts_user_char_write_emu_thread(call_fn, master_fd):
+def pts_user_char_write_emu_thread(call_fn, master_fd) -> None:
     while True:
         try:
             # Wait until we recieve data, since O_NONBLOCK is enabled now.
@@ -72,7 +72,7 @@ def pts_user_char_write_emu_thread(call_fn, master_fd):
             break
 
 
-def setup_uart_output_method(chipemu: havnEmulator, output_method: str):
+def setup_uart_output_method(chipemu: havnEmulator, output_method: str) -> None:
     if output_method == "pts":
         master_fd, slave_fd = pty.openpty()
         tty.setraw(master_fd)
@@ -115,7 +115,7 @@ def setup_uart_output_method(chipemu: havnEmulator, output_method: str):
         print("setup_uart_output_method recieved an invalid output method!")
 
 
-def main():
+def main() -> None:
     _argparser = argparse.ArgumentParser(
         prog="gscemu",
         description="An emulator for the Google Security Chip(s), "

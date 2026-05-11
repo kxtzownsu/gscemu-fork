@@ -32,8 +32,8 @@ class UartController:
 
         # Have a blank function incase that the callback was never actually
         # initialized.
-        self.char_out_callback = lambda char: None
-        self.char_out_callback_userdata = None
+        self.char_out_callback = lambda char, user_data: None
+        self.char_out_callback_userdata: typing.Any = None
 
         # TX cannot be ready until CTRL is set. CTRL is 0 by default.
         self.state = 1  # BIT(0)
@@ -43,7 +43,7 @@ class UartController:
         self.fifo = 0
         self.ictrl = 0
 
-    def uart_worker(self):
+    def uart_worker(self) -> None:
         while True:
             try:
                 # Wait for the next operation to enter the queue
@@ -67,19 +67,19 @@ class UartController:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.uart_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
     def set_char_out_callback(self, fn, user_data) -> None:
@@ -93,7 +93,7 @@ class UartController:
     def queued_uart_out_callback(self, fn, user_data) -> None:
         self.opqueue.put([self.set_char_out_callback, (fn, user_data)])
 
-    def ctrl_process(self):
+    def ctrl_process(self) -> None:
         # UART_CTRL_TX
         # 0 = disabled, 1 = enabled
         if self.ctrl & 1:  # BIT(0)
@@ -196,11 +196,11 @@ class UartController:
             unpend_external_irq(self.ctx.c_fast.m3, 174)
 
 
-def init_UartController(ctx: EmulatorContext, regs: dict):
+def init_UartController(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = UartController(ctx)
     c_emu.start_worker()
 
-    reg_fn_map = [0] * (extract_max_number(regs) + 4)
+    reg_fn_map: list = [0] * (extract_max_number(regs) + 4)
 
     reg_fn_map[regs["WDATA"]] = [c_emu.read_wdata, c_emu.write_wdata]
     reg_fn_map[regs["NCO"]] = [c_emu.read_nco, c_emu.write_nco]
@@ -216,7 +216,7 @@ def init_UartController(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:

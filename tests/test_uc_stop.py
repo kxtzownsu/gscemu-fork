@@ -59,7 +59,7 @@ regs = [
 ]
 
 
-def wait_thread():
+def wait_thread() -> None:
     global uc
 
     time.sleep(0.001)

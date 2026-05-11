@@ -54,7 +54,7 @@ blank_component = ComponentObjects(
 )
 
 
-def initialize_components(ctx: EmulatorContext):
+def initialize_components(ctx: EmulatorContext) -> None:
     ctx.components["M3"] = m3.init_ArmSC300(ctx, regdefs.M3_REGS)
     ctx.c_fast.m3 = ctx.components["M3"].object
 

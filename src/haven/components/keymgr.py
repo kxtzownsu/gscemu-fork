@@ -73,7 +73,7 @@ class ShaEngine:
             "KEY": 0,
         }
 
-    def sha_worker(self):
+    def sha_worker(self) -> None:
         while True:
             try:
                 # Wait for the next operation to enter the queue
@@ -108,22 +108,22 @@ class ShaEngine:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.sha_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
-    def trig_process(self):
+    def trig_process(self) -> None:
         if self.trig == 1:  # BIT(0)
             # If this is a USE_CERT operation, just ignore it and say
             # the op is done.
@@ -175,16 +175,16 @@ class ShaEngine:
         else:
             prints.fatal("SHA_TRIG received an invalid value")
 
-    def oneshot_check(self):
+    def oneshot_check(self) -> None:
         if len(self.input_fifo) == self.msglen_full:
             prints.debug("SHA INPUT_FIFO fully populated in oneshot mode!")
             self.recieve_data = False
             self.start_hash = True
 
-    def hash_data(self):
+    def hash_data(self) -> None:
         prints.debug("SHA engine hashing kicked off!")
         prints.debug(f"SHA engine running with self.en=0x{self.en:x}")
-        engine = None
+        engine: hashlib._Hash | hmac.HMAC | None = None
         engine_settings = self.en & (2 | 32)  # BIT(1) | BIT(5)
 
         if engine_settings == 0:  # SHA256
@@ -199,6 +199,7 @@ class ShaEngine:
             engine = hmac.new(derived_hmac_key, self.input_fifo, hashlib.sha256)
         else:
             prints.fatal("unsupported ShaEngine CFG_EN state")
+            return # This is very bad.
 
         digest = engine.digest()
         for i in range(8):
@@ -372,7 +373,7 @@ class AesEngine:
         self.rfifo_empty = True
         self.wfifo_empty = True
 
-    def aes_worker(self):
+    def aes_worker(self) -> None:
         while True:
             try:
                 # Wait for the next operation to enter the queue
@@ -512,22 +513,22 @@ class AesEngine:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.aes_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
-    def _galois_multiply(self):
+    def _galois_multiply(self) -> None:
         mac = bytearray()
         for i in range(4):
             mac.extend(struct.pack(">I", self.gcm_mac[i]))
@@ -563,7 +564,7 @@ class AesEngine:
                 0
             ]
 
-    def _get_key_bytes(self):
+    def _get_key_bytes(self) -> bytes:
         key_words = {0: 4, 1: 6, 2: 8}[self.ctrl["KEYSIZE"]]
         if self.use_hidden_key & 0x400:  # ENABLE bit
             # The AES engine implements a HIDDEN_KEY mode, where it uses a
@@ -579,12 +580,12 @@ class AesEngine:
             key.extend(struct.pack("<I", self.aes_key[i]))
         return bytes(key)
 
-    def _aes_block_encrypt(self, block_bytes):
+    def _aes_block_encrypt(self, block_bytes) -> bytes:
         key = self._get_key_bytes()
         cipher = domeAES.new(key, domeAES.MODE_ECB)
         return cipher.encrypt(bytes(block_bytes))
 
-    def read_ctrl(self, size: int, queue: queue.Queue):
+    def read_ctrl(self, size: int, queue: queue.Queue) -> None:
         val = (
             (self.ctrl["RESET"] << 0)
             | (self.ctrl["KEYSIZE"] << 1)
@@ -595,7 +596,7 @@ class AesEngine:
         )
         queue.put(val)
 
-    def write_ctrl(self, size: int, value: int):
+    def write_ctrl(self, size: int, value: int) -> None:
         self.ctrl["RESET"] = (value >> 0) & 1
         self.ctrl["KEYSIZE"] = (value >> 1) & 0x3
         self.ctrl["CIPHER_MODE"] = (value >> 3) & 0x3
@@ -603,14 +604,14 @@ class AesEngine:
         self.ctrl["CTR_BIG_ENDIAN"] = (value >> 6) & 1
         self.ctrl["ENABLE"] = (value >> 7) & 1
 
-    def read_wfifo(self, size: int, queue: queue.Queue):
+    def read_wfifo(self, size: int, queue: queue.Queue) -> None:
         queue.put(0)
 
-    def write_wfifo(self, size: int, value: int):
+    def write_wfifo(self, size: int, value: int) -> None:
         self.wfifo.put(value, block=False)
         self.wfifo_empty = False
 
-    def read_rfifo(self, size: int, queue: queue.Queue):
+    def read_rfifo(self, size: int, queue: queue.Queue) -> None:
         try:
             val = self.rfifo.get_nowait()
             if self.rfifo.qsize() == 0:
@@ -620,89 +621,91 @@ class AesEngine:
 
         queue.put(val)
 
-    def write_rfifo(self, size: int, value: int):
+    def write_rfifo(self, size: int, value: int) -> None:
         return
 
-    def read_key(self, size: int, queue: queue.Queue, index: int):
+    def read_key(self, size: int, queue: queue.Queue, index: int) -> None:
         queue.put(self.aes_key[index])
 
-    def write_key(self, size: int, value: int, index: int):
+    def write_key(self, size: int, value: int, index: int) -> None:
         self.aes_key[index] = value
 
-    def read_ctr(self, size: int, queue: queue.Queue, index: int):
+    def read_ctr(self, size: int, queue: queue.Queue, index: int) -> None:
         queue.put(self.counter[index])
 
-    def write_ctr(self, size: int, value: int, index: int):
+    def write_ctr(self, size: int, value: int, index: int) -> None:
         self.counter[index] = value
         self.counter_updated = True
 
-    def read_key_start(self, size: int, queue: queue.Queue):
+    def read_key_start(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.key_start)
 
-    def write_key_start(self, size: int, value: int):
+    def write_key_start(self, size: int, value: int) -> None:
         self.key_start = value & 1
 
-    def read_rand_stall(self, size: int, queue: queue.Queue):
+    def read_rand_stall(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.rand_stall)
 
-    def write_rand_stall(self, size: int, value: int):
+    def write_rand_stall(self, size: int, value: int) -> None:
         self.rand_stall = value
 
-    def read_wfifo_level(self, size: int, queue: queue.Queue):
+    def read_wfifo_level(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.wfifo.qsize())
 
-    def write_wfifo_level(self, size: int, value: int):
+    def write_wfifo_level(self, size: int, value: int) -> None:
         return
 
-    def read_wfifo_full(self, size: int, queue: queue.Queue):
+    def read_wfifo_full(self, size: int, queue: queue.Queue) -> None:
         if self.wfifo.qsize() >= 16:
             queue.put(1)
         else:
             queue.put(0)
 
-    def write_wfifo_full(self, size: int, value: int):
+    def write_wfifo_full(self, size: int, value: int) -> None:
         return
 
-    def read_rfifo_level(self, size: int, queue: queue.Queue):
+    def read_rfifo_level(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.rfifo.qsize())
 
-    def write_rfifo_level(self, size: int, value: int):
+    def write_rfifo_level(self, size: int, value: int) -> None:
         return
 
-    def read_rfifo_empty(self, size: int, queue: queue.Queue):
+    def read_rfifo_empty(self, size: int, queue: queue.Queue) -> None:
         queue.put(int(self.rfifo_empty))
 
-    def write_rfifo_empty(self, size: int, value: int):
+    def write_rfifo_empty(self, size: int, value: int) -> None:
         return
 
-    def read_gcm_do_acc(self, size: int, queue: queue.Queue):
+    def read_gcm_do_acc(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.gcm_do_acc)
 
-    def write_gcm_do_acc(self, size: int, value: int):
+    def write_gcm_do_acc(self, size: int, value: int) -> None:
         self.gcm_do_acc = value & 1
 
-    def read_gcm_h(self, size: int, queue: queue.Queue, index: int):
+    def read_gcm_h(self, size: int, queue: queue.Queue, index: int) -> None:
         queue.put(self.gcm_h[index])
 
-    def write_gcm_h(self, size: int, value: int, index: int):
+    def write_gcm_h(self, size: int, value: int, index: int) -> None:
         self.gcm_h[index] = value
 
-    def read_gcm_mac(self, size: int, queue: queue.Queue, index: int):
+    def read_gcm_mac(self, size: int, queue: queue.Queue, index: int) -> None:
         queue.put(self.gcm_mac[index])
 
-    def write_gcm_mac(self, size: int, value: int, index: int):
+    def write_gcm_mac(self, size: int, value: int, index: int) -> None:
         self.gcm_mac[index] = value
 
-    def read_gcm_hash_in(self, size: int, queue: queue.Queue, index: int):
+    def read_gcm_hash_in(
+        self, size: int, queue: queue.Queue, index: int
+    ) -> None:
         queue.put(self.gcm_hash_in[index])
 
-    def write_gcm_hash_in(self, size: int, value: int, index: int):
+    def write_gcm_hash_in(self, size: int, value: int, index: int) -> None:
         self.gcm_hash_in[index] = value
 
-    def read_wipe_secrets(self, size: int, queue: queue.Queue):
+    def read_wipe_secrets(self, size: int, queue: queue.Queue) -> None:
         queue.put(0)
 
-    def write_wipe_secrets(self, size: int, value: int):
+    def write_wipe_secrets(self, size: int, value: int) -> None:
         if value:
             self.ctrl["RESET"] = 1
 
@@ -738,7 +741,7 @@ class KeymgrController:
         self.shaengine.start_worker()
         self.aesengine.start_worker()
 
-    def read_hkey_rwr(self, size: int, index: int) -> None:
+    def read_hkey_rwr(self, size: int, index: int) -> int:
         with self.mutex:
             return self.hkey_rwr[index]
 
@@ -746,7 +749,7 @@ class KeymgrController:
         with self.mutex:
             self.hkey_rwr[index] = value
 
-    def read_hkey_fwr(self, size: int, index: int) -> None:
+    def read_hkey_fwr(self, size: int, index: int) -> int:
         with self.mutex:
             return self.hkey_fwr[index]
 
@@ -754,7 +757,7 @@ class KeymgrController:
         with self.mutex:
             self.hkey_fwr[index] = value
 
-    def read_hkey_frr(self, size: int, index: int) -> None:
+    def read_hkey_frr(self, size: int, index: int) -> int:
         with self.mutex:
             return self.hkey_frr[index]
 
@@ -762,7 +765,7 @@ class KeymgrController:
         with self.mutex:
             return
 
-    def read_fw_major_version(self, size: int) -> None:
+    def read_fw_major_version(self, size: int) -> int:
         with self.mutex:
             return self.fw_major_version
 
@@ -770,7 +773,7 @@ class KeymgrController:
         with self.mutex:
             self.fw_major_version = value
 
-    def read_hkey_err_flags(self, size: int) -> None:
+    def read_hkey_err_flags(self, size: int) -> int:
         with self.mutex:
             return self.hkey_err_flags
 
@@ -778,7 +781,7 @@ class KeymgrController:
         with self.mutex:
             self.hkey_err_flags = value
 
-    def read_fwr_vld(self, size: int) -> None:
+    def read_fwr_vld(self, size: int) -> int:
         with self.mutex:
             return self.fwr_vld
 
@@ -786,7 +789,7 @@ class KeymgrController:
         with self.mutex:
             self.fwr_vld = value
 
-    def read_rwr_vld(self, size: int) -> None:
+    def read_rwr_vld(self, size: int) -> int:
         with self.mutex:
             return self.rwr_vld
 
@@ -794,7 +797,7 @@ class KeymgrController:
         with self.mutex:
             self.rwr_vld = value
 
-    def read_fwr_lock(self, size: int) -> None:
+    def read_fwr_lock(self, size: int) -> int:
         with self.mutex:
             return self.fwr_lock
 
@@ -802,7 +805,7 @@ class KeymgrController:
         with self.mutex:
             self.fwr_lock = value
 
-    def read_rwr_lock(self, size: int) -> None:
+    def read_rwr_lock(self, size: int) -> int:
         with self.mutex:
             return self.rwr_lock
 
@@ -810,7 +813,7 @@ class KeymgrController:
         with self.mutex:
             self.rwr_lock = value
 
-    def read_cert_revoke_ctrl(self, size: int, index: int) -> None:
+    def read_cert_revoke_ctrl(self, size: int, index: int) -> int:
         with self.mutex:
             return self.cert_revoke_ctrl[index]
 
@@ -822,7 +825,7 @@ class KeymgrController:
         pass
 
 
-def init_KeymgrController(ctx: EmulatorContext, regs: dict):
+def init_KeymgrController(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = KeymgrController(ctx)
 
     reg_fn_map = {
@@ -1020,7 +1023,7 @@ def init_KeymgrController(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return reg_fn_map[offset][0](size)
         except KeyError:

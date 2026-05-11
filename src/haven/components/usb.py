@@ -21,7 +21,7 @@ class UsbController:
 
         self.grstctl = 0
 
-    def usb_worker(self):
+    def usb_worker(self) -> None:
         while True:
             try:
                 op = self.opqueue.get()
@@ -34,29 +34,29 @@ class UsbController:
             except Exception as e:
                 prints.fatal(e)
 
-    def start_worker(self):
+    def start_worker(self) -> None:
         if not self.opthread:
             self.opthread = threading.Thread(target=self.usb_worker)
             self.opthread.daemon = True
             self.opthread.start()
 
-    def queue_read_worker_op(self, size: int, target_fn):
+    def queue_read_worker_op(self, size: int, target_fn) -> int:
         retqueue = queue.Queue()
         self.opqueue.put([target_fn, (size, retqueue)])
         self.opqueue.join()
         return retqueue.get_nowait()
 
-    def queue_write_worker_op(self, size: int, value: int, target_fn):
+    def queue_write_worker_op(self, size: int, value: int, target_fn) -> None:
         self.opqueue.put([target_fn, (size, value)])
 
-    def read_grstctl(self, size: int, queue: queue.Queue):
+    def read_grstctl(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.grstctl)
 
-    def write_grstctl(self, size: int, value: int):
+    def write_grstctl(self, size: int, value: int) -> None:
         return
 
 
-def init_UsbController(ctx: EmulatorContext, regs: dict):
+def init_UsbController(ctx: EmulatorContext, regs: dict) -> ComponentObjects:
     c_emu = UsbController()
     c_emu.start_worker()
 
@@ -64,7 +64,7 @@ def init_UsbController(ctx: EmulatorContext, regs: dict):
 
     def component_read_handler(
         uc: qemu.Uc, offset: int, size: int, user_data: typing.Any
-    ) -> int:
+    ) -> int | None:
         try:
             return c_emu.queue_read_worker_op(size, reg_fn_map[offset][0])
         except KeyError:
@@ -76,7 +76,7 @@ def init_UsbController(ctx: EmulatorContext, regs: dict):
         try:
             c_emu.queue_write_worker_op(size, value, reg_fn_map[offset][1])
         except KeyError:
-            return 0
+            return
 
     return ComponentObjects(
         c_emu, component_read_handler, component_write_handler

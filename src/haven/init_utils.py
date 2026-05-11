@@ -161,7 +161,7 @@ def load_firmware(
     return True
 
 
-def install_tpm_endorsement_certs(ctx: EmulatorContext):
+def install_tpm_endorsement_certs(ctx: EmulatorContext) -> None:
     # Write the EPS into INFO1
     ctx.uc.mem_write(0x28000 + 0x600, PROD_ENDORSEMENT_SEED)
 
