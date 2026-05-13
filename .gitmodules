@@ -1,0 +1,3 @@
+[submodule "src/citadel"]
+	path = src/citadel
+	url = https://github.com/HavenOverflow/gscemu-citadel
