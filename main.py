@@ -12,6 +12,7 @@ This main.py file was built for the haven Emulator object, but we will add more
 support in the future.
 """
 
+import typing
 import argparse
 import fcntl
 import os
@@ -25,7 +26,6 @@ import tty
 
 from env import *
 from lib.logger import GscemuLogger
-from src.haven import Emulator as havnEmulator
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -72,7 +72,7 @@ def pts_user_char_write_emu_thread(call_fn, master_fd) -> None:
             break
 
 
-def setup_uart_output_method(chipemu: havnEmulator, output_method: str) -> None:
+def setup_uart_output_method(chipemu: typing.Any, output_method: str) -> None:
     if output_method == "pts":
         master_fd, slave_fd = pty.openpty()
         tty.setraw(master_fd)
@@ -115,13 +115,21 @@ def setup_uart_output_method(chipemu: havnEmulator, output_method: str) -> None:
         print("setup_uart_output_method recieved an invalid output method!")
 
 
-def main() -> None:
+def main() -> bool:
     _argparser = argparse.ArgumentParser(
         prog="gscemu",
         description="An emulator for the Google Security Chip(s), "
         "whereby the stock firmware can be run. All components are "
         "intended to match the original behavior of the silicon "
         "as much as possible.",
+    )
+
+    _argparser.add_argument(
+        "-c",
+        "--chip",
+        default="haven",
+        choices=["haven", "citadel", "dauntless"],
+        help="Specify the Titan chip variant."
     )
 
     _argparser.add_argument(
@@ -141,9 +149,14 @@ def main() -> None:
 
     args = _argparser.parse_args()
 
-    chipemu = havnEmulator(
-        GSCEMULATOR_FW_PATHS, GSCEMULATOR_FW_STRICT_SIZE_CHECKING
-    )
+    if args.chip == "haven":
+        from src.haven import Emulator as havnEmulator
+        chipemu = havnEmulator(
+            GSCEMULATOR_FW_PATHS, GSCEMULATOR_FW_STRICT_SIZE_CHECKING
+        )
+    else:
+        prints.fatal("Chip variant unsupported as of now.")
+        return False
 
     setup_uart_output_method(chipemu, args.console_output)
 
@@ -153,6 +166,7 @@ def main() -> None:
 
     chipemu.start_emulation()
 
+    return True # If we ever reach here, the emulator stopped. Just return True.
 
 # We need this now that we're making gscemu a pip installable CLI tool, so that
 # we do not double call the main function, causing double emulator
@@ -160,4 +174,5 @@ def main() -> None:
 # gscemu should also still be runnable from python3 main.py, thus we still
 # keep this.
 if __name__ == "__main__":
-    main()
+    ret = main()
+    sys.exit(int(ret))
