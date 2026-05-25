@@ -26,11 +26,10 @@ gscemu = "main:main"
 py-modules = ["main", "env"]
 
 [tool.setuptools.packages.find]
-include = ["lib*", "src*", "fw*"]
+include = ["lib*", "src*"]
 
 [tool.setuptools.package-data]
-"fw.rom" = ["*.rom"]
-"fw.haven" = ["*.bin"]
+"src.haven.fw" = ["*.bin"]
 
 [tool.basedpyright]
 typeCheckingMode = "basic"

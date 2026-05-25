@@ -3,8 +3,6 @@
 
 from pathlib import Path
 
-import fw.haven
-import fw.rom
 from lib.logger import GscemuLoggerSettings
 
 GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(
@@ -14,9 +12,10 @@ GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(
     warning_prints=True,
 )
 
+GSCEMULATOR_FW_DIR = Path(__file__).resolve().parent / "src" / "haven" / "fw"
 GSCEMULATOR_FW_PATHS = {
-    "bootrom": str(Path(fw.rom.__file__).parent / "haven.rom"),
-    "firmware": str(Path(fw.haven.__file__).parent / "cr50_prod_0_5_271.bin"),
+    "bootrom": str(GSCEMULATOR_FW_DIR / "rom.bin"),
+    "firmware": str(GSCEMULATOR_FW_DIR / "0_5_271.bin"),
 }
 GSCEMULATOR_FW_STRICT_SIZE_CHECKING = False
 
