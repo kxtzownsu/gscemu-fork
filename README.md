@@ -6,11 +6,7 @@ powered by unicorn and python, gscemulator is able to run a production
 copy of a gsc image!
 
 ## how to run
-*running this as a module is not fully supported yet, as the imports may mess up
-your system imports if you do not run it in a venv. to run without imports, run
-`pip3 install -r requirements.txt && python3 main.py`*
-
-`pip3 install git+https://github.com/HavenOverflow/gscemu && gscemu`
+`pip3 install -r requirements.txt && python3 main.py`
 
 this was written 95% without AI, but one component within the emulator was \
 still written with AI(timels.py). Removal and rewrite of this component is \
@@ -19,7 +15,7 @@ planned soon.
 ## how to use
 
 GSCEmulator implements an interactive console over stdout to access the Cr50
-console over UART. You may type in the console after running `gscemu`,
+console over UART. You may type in the console after running `python3 main.py`,
 but you may need to wait for a while as it is booting. Precisely, the
 ```
 Console is enabled; type HELP for help.

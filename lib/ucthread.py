@@ -2,9 +2,12 @@
 # Copyright (C) 2026 HavenOverflow/appleflyer
 
 import threading
-
 import unicorn as qemu
 
+from lib.logger import GscemuLogger
+from env import GSCEMULATOR_LOGGER_SETTINGS
+
+prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
 class UcThread:
     def __init__(self, uc: qemu.Uc):
@@ -27,9 +30,18 @@ class UcThread:
 
             # TODO(appleflyer): Change this to uc.emu_run when pr is merged into
             # 2.1.5-dev.
-            self.uc.emu_start(
-                self.uc.reg_read(qemu.arm_const.UC_ARM_REG_PC) | 1, 0xFFFFFFFF
-            )
+            try:
+                self.uc.emu_start(
+                    self.uc.reg_read(qemu.arm_const.UC_ARM_REG_PC) | 1, 
+                    0xFFFFFFFF,
+                )
+            except Exception as e:
+                prints.fatal(e)
+                prints.fatal(
+                    "Emulator crashed at "
+                    f"0x{self.uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
+                )
+                return
 
     def emu_start(self) -> bool:
         if not self.emu_thread:

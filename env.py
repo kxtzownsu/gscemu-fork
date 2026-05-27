@@ -7,16 +7,11 @@ from lib.logger import GscemuLoggerSettings
 
 GSCEMULATOR_LOGGER_SETTINGS = GscemuLoggerSettings(
     global_switch=True,
-    debug_prints=False,
-    info_prints=False,
+    debug_prints=True,
+    info_prints=True,
     warning_prints=True,
 )
 
-GSCEMULATOR_FW_DIR = Path(__file__).resolve().parent / "src" / "haven" / "fw"
-GSCEMULATOR_FW_PATHS = {
-    "bootrom": str(GSCEMULATOR_FW_DIR / "rom.bin"),
-    "firmware": str(GSCEMULATOR_FW_DIR / "0_5_271.bin"),
-}
 GSCEMULATOR_FW_STRICT_SIZE_CHECKING = False
 
 GSCEMULATOR_PC_LOGGING_SETTINGS = {"log_pc": False, "log_file_path": "./pc.txt"}

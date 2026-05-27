@@ -8,7 +8,7 @@ other projects, if needed. But this wrapper file allows a developer to start an
 instance of gscemulator independently, for testing or fuzzing, so that they need
 not to take the effort to create code to interact with the emulator object.
 
-This main.py file was built for the haven Emulator object, but we will add more
+This main.py file was built for the gsc Emulator objects, but we will add more
 support in the future.
 """
 
@@ -26,6 +26,13 @@ import tty
 
 from env import *
 from lib.logger import GscemuLogger
+
+GSCEMULATOR_HAVEN_DEFAULT_FW_DIR = (
+    Path(__file__).resolve().parent / "src" / "haven" / "fw"
+)
+GSCEMULATOR_CITADEL_DEFAULT_FW_DIR = (
+    Path(__file__).resolve().parent / "src" / "citadel" / "fw"
+)
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
@@ -152,7 +159,18 @@ def main() -> bool:
     if args.chip == "haven":
         from src.haven import Emulator as havnEmulator
         chipemu = havnEmulator(
-            GSCEMULATOR_FW_PATHS, GSCEMULATOR_FW_STRICT_SIZE_CHECKING
+            {
+                "bootrom": str(GSCEMULATOR_HAVEN_DEFAULT_FW_DIR / "rom.bin"),
+                "firmware": str(GSCEMULATOR_HAVEN_DEFAULT_FW_DIR / "fw.bin"),
+            }, GSCEMULATOR_FW_STRICT_SIZE_CHECKING
+        )
+    elif args.chip == "citadel":
+        from src.citadel import Emulator as citadelEmulator
+        chipemu = citadelEmulator(
+            {
+                "bootrom": str(GSCEMULATOR_CITADEL_DEFAULT_FW_DIR / "rom.bin"),
+                "firmware": str(GSCEMULATOR_CITADEL_DEFAULT_FW_DIR / "fw.bin"),
+            }, GSCEMULATOR_FW_STRICT_SIZE_CHECKING
         )
     else:
         prints.fatal("Chip variant unsupported as of now.")
