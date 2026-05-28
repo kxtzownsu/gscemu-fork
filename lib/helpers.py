@@ -14,6 +14,13 @@ from lib.ucthread import UcThread
 
 prints = GscemuLogger(GSCEMULATOR_LOGGER_SETTINGS)
 
+def unhandled_register_warning(
+    ctx: EmulatorContext, logger: GscemuLogger, component: str, address: int
+) -> None:
+    logger.warning(
+        f"Unhandled register 0x{address:x} in component {component} at "
+        + f"pc=0x{ctx.uc.reg_read(qemu.arm_const.UC_ARM_REG_PC):x}"
+    )
 
 def unhandled_register_exit(
     ctx: EmulatorContext, logger: GscemuLogger, component: str, address: int
