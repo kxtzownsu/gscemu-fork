@@ -40,7 +40,7 @@ _EXC_RETURN_VALS = [0xFFFFFFF1, 0xFFFFFFF9, 0xFFFFFFFD]
 
 
 class ArmInterruptHandler:
-    def __init__(self, arm_cpu: ArmSC300):
+    def __init__(self, arm_cpu):
         # We need this to read the VTOR addr for interrupts.
         self.cpu = arm_cpu
         self.ctx = self.cpu.ctx
