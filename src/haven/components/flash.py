@@ -66,7 +66,7 @@ class FlashController:
         self.pe_en = 0
 
         self.opcode = 0
-        self.pe_control = 0  # Helps us know which CONTROL side to use.
+        self.pe_control = None  # Helps us know which CONTROL side to use.
 
         self.trans_offset = 0
         self.trans_mainb = 0
@@ -97,7 +97,7 @@ class FlashController:
                 # the value, and execution can proceed.
                 self.opqueue.task_done()
 
-                if not self.pe_control:
+                if self.pe_control is None:
                     # We did not recieve any opcode, which means the system
                     # hasn't requested a FLASH operation yet.
                     continue
@@ -117,8 +117,9 @@ class FlashController:
                     except KeyError:
                         prints.warning("Invalid PE_CONTROL provided to FLASH!")
 
-                # Operation completed! Clear the PE_CONTROL variable and PE_EN.
-                self.pe_control = 0
+                # Operation completed! Clear PE_CONTROL, PE_EN and opcode.
+                self.opcode = 0
+                self.pe_control = None
                 self.pe_en = 0
 
                 # Let's clear the temporary variables too.
@@ -264,7 +265,10 @@ class FlashController:
             self.error_placed_time = time.perf_counter()
 
     def read_pe_control_0(self, size: int, queue: queue.Queue) -> None:
-        queue.put(self.pe_control)
+        if self.pe_control == 0:
+            queue.put(self.opcode)
+        else:
+            queue.put(0)
 
     def write_pe_control_0(self, size: int, value: int) -> None:
         # We do not need to handle the case of another write changing the opcode
@@ -278,9 +282,13 @@ class FlashController:
 
         self.opcode = value
         self.pe_control = 0
+        self.pe_en = 0
 
     def read_pe_control_1(self, size: int, queue: queue.Queue) -> None:
-        queue.put(self.pe_control)
+        if self.pe_control == 1:
+            queue.put(self.opcode)
+        else:
+            queue.put(0)
 
     def write_pe_control_1(self, size: int, value: int) -> None:
         # We do not need to handle the case of another write changing the opcode
@@ -294,6 +302,7 @@ class FlashController:
 
         self.opcode = value
         self.pe_control = 1
+        self.pe_en = 0
 
     def read_pe_en(self, size: int, queue: queue.Queue) -> None:
         queue.put(self.pe_en)
