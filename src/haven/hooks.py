@@ -19,6 +19,7 @@ from lib.logger import GscemuLogger
 from .components.m3 import (
     exc_return_handler,
     handle_externally_pended_interrupts,
+    handle_primask_faultmask_update,
     pend_svcall_interrupt,
     unsafe_pend_sysintr,
     wait_for_interrupt,
@@ -94,14 +95,30 @@ def handle_wfi_instruction(uc: qemu.Uc, user_data: EmulatorContext) -> bool:
         qemu.arm_const.UC_ARM_REG_PC,
         (ctx.ucmutex.reg_read(qemu.arm_const.UC_ARM_REG_PC) + 2) | 1,
     )
+
+    # We are still in safe hook context. Let's check if we are allowed to
+    # service any interrupts right now.
+    handle_externally_pended_interrupts(ctx.c_fast.m3)
+
     return True
 
 
 def m3_interrupt_safe_point(
-    uc: qemu.Uc, address: int, size: int, user_data: EmulatorContext
+    uc: qemu.Uc, user_data: EmulatorContext
 ) -> bool:
     ctx = user_data
     handle_externally_pended_interrupts(ctx.c_fast.m3)
+    return True
+
+
+def m3_faultmask_primask_update(
+    uc: qemu.Uc, 
+    regid: int, 
+    old_value: int, 
+    new_value: int, 
+    user_data: EmulatorContext
+) -> bool:
+    handle_primask_faultmask_update(user_data.c_fast.m3)
     return True
 
 

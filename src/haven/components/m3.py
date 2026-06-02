@@ -210,6 +210,16 @@ class ArmInterruptHandler:
         )
         self.intr_queue.join()
 
+    def handle_primask_faultmask_update(self) -> None:
+        self.intr_queue.put(
+            [
+                None,
+                False,  # increment_pc
+                tuple(),
+            ]
+        )
+        self.intr_queue.join()
+
     def should_autoclear_exception(self, exception_num: int) -> None:
         # NMI, HardFault, MemManage, BusFault, UsageFault, SVCall, DebugMonitor,
         # PendSV, SysTick
@@ -241,6 +251,7 @@ class ArmInterruptHandler:
         with self.nvic_pend_lock:
             self.nvic_pend[irq] = True
         self.external_interrupt_pending.set()
+        self.ctx.uc.trigger_safe_hook()
 
     def unpend_external_irq(self, irq: int) -> None:
         with self.nvic_pend_lock:
@@ -826,6 +837,10 @@ def pend_svcall_interrupt(c_emu: ArmSC300) -> None:
 
 def handle_externally_pended_interrupts(c_emu: ArmSC300) -> None:
     c_emu.intr_op.handle_externally_pended_interrupts()
+
+
+def handle_primask_faultmask_update(c_emu: ArmSC300) -> None:
+    c_emu.intr_op.handle_primask_faultmask_update()
 
 
 def wait_for_interrupt(c_emu: ArmSC300) -> None:

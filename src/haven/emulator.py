@@ -117,20 +117,23 @@ class Emulator:
 
         # On an external interrupt, we shouldn't just branch to the interrupt
         # directly. We need to wait until we are in a defined emulator state.
-        # Using UC_HOOK_BLOCK fixes this, although now external interrupts can
-        # only occur on a UC_HOOK_BLOCK.
         #
         # Interrupting on an external interrupt directly while in an undefined
         # emulator state may cause emu_stop/emu_start on MMIO_MAP callback,
         # which is very dangerous. It is impossible to determine if we have
         # returned from an MMIO_MAP callback, or if we are still in an MMIO_MAP
         # callback.
-        #
-        # Albeit slow, this is the only way to fix the issue at this current
-        # point in time.
         self.ctx.uc.hook_add(
-            htype=qemu.UC_HOOK_BLOCK,
+            htype=qemu.UC_HOOK_SAFE,
             callback=hooks.m3_interrupt_safe_point,
+            user_data=self.ctx,
+        )
+
+        # Once FAULTMASK or PRIMASK updates, we need to re-trigger an M3
+        # interrupt check cycle, so that pending interrupts can be pended.
+        self.ctx.uc.hook_add(
+            htype=(qemu.UC_HOOK_ARM_FAULTMASK | qemu.UC_HOOK_ARM_PRIMASK),
+            callback=hooks.m3_faultmask_primask_update,
             user_data=self.ctx,
         )
 

@@ -144,7 +144,7 @@ class UartController:
 
             queue.put(char)
         else:
-            prints.warning("RDATA written to whilst STATE_RX set!")
+            prints.warning("RDATA read whilst STATE_RX set!")
 
     def write_rdata(self, size: int, value: int) -> None:
         unhandled_register_io(prints, "WRITE", "UART0", "RDATA")

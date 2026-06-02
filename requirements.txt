@@ -1,5 +1,5 @@
 termcolor
-git+https://github.com/appleflyerv3/unicorn.git@mmio_map_pc_sync#egg=unicorn&subdirectory=bindings/python
+git+https://github.com/HavenOverflow/unicorn.git#egg=unicorn&subdirectory=bindings/python
 # unicorn==2.1.5
 git+https://github.com/HavenOverflow/ot_dsim.git
 pycryptodome

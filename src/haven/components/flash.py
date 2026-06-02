@@ -117,7 +117,7 @@ class FlashController:
                     except KeyError:
                         prints.warning("Invalid PE_CONTROL provided to FLASH!")
 
-                # Operation completed! Clear PE_CONTROL, PE_EN and opcode.
+                # Operation completed! Clear PE_CONTROL and opcode.
                 self.opcode = 0
                 self.pe_control = None
 
