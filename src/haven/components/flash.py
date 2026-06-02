@@ -120,7 +120,6 @@ class FlashController:
                 # Operation completed! Clear PE_CONTROL, PE_EN and opcode.
                 self.opcode = 0
                 self.pe_control = None
-                self.pe_en = 0
 
                 # Let's clear the temporary variables too.
                 self.start_addr = 0
