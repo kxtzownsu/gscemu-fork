@@ -62,11 +62,20 @@ def stdout_user_char_write_emu_thread(call_fn) -> None:
 
 def stdout_stress_test_write_emu_thread(call_fn) -> None:
     time.sleep(10) # wait for emulator to init first
+
+    for char in "dump_nvm\n":
+        call_fn(ord(char))
+
+    time.sleep(0.1)
+
+    UP_ARROW_NEWLINE_CODES = [27, 91, 65, 10]
     while True:
         try:
-            for char in "dump_nvm\n":
-                call_fn(ord(char))
-                time.sleep(0.01)
+            for code in UP_ARROW_NEWLINE_CODES:
+                call_fn(code)
+
+            time.sleep(0.01)
+
         except Exception as e:
             prints.error(f"pty user -> emu error: {e}")
             break
@@ -130,6 +139,23 @@ def setup_uart_output_method(chipemu: typing.Any, output_method: str) -> None:
 
         chipemu.set_uart_output_fn(stdout_emu_char_write_pts_callback)
 
+    elif output_method == "stdout_stress_cr50_nvmem":
+        # for macOS to ensure ctrl+s is detected.
+        new_settings = termios.tcgetattr(sys.stdin)
+        new_settings[0] &= ~termios.IXON
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, new_settings)
+
+        tty.setcbreak(sys.stdin.fileno())
+
+        write_thread = threading.Thread(
+            target=stdout_stress_test_write_emu_thread,
+            daemon=True,
+            args=(chipemu.uart_input,),
+        )
+        write_thread.start()
+
+        chipemu.set_uart_output_fn(stdout_emu_char_write_pts_callback)
+
     else:
         print("setup_uart_output_method recieved an invalid output method!")
 
@@ -155,7 +181,7 @@ def main() -> bool:
         "-o",
         "--console-output",
         default="stdout",
-        choices=["stdout", "pts"],
+        choices=["stdout", "pts", "stdout_stress_cr50_nvmem"],
         help="Where to print the UART output to, "
         "and where to recieve input from.",
     )
