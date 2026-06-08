@@ -23,6 +23,7 @@ import sys
 import termios
 import threading
 import tty
+import time
 
 from env import *
 from lib.logger import GscemuLogger
@@ -55,6 +56,17 @@ def stdout_user_char_write_emu_thread(call_fn) -> None:
                 signal.raise_signal(signal.SIGUSR1)
             else:
                 call_fn(ord(char))
+        except Exception as e:
+            prints.error(f"pty user -> emu error: {e}")
+            break
+
+def stdout_stress_test_write_emu_thread(call_fn) -> None:
+    time.sleep(10) # wait for emulator to init first
+    while True:
+        try:
+            for char in "dump_nvm\n":
+                call_fn(ord(char))
+                time.sleep(0.01)
         except Exception as e:
             prints.error(f"pty user -> emu error: {e}")
             break

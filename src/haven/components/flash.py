@@ -198,8 +198,10 @@ class FlashController:
         # Count register is zero-based, according to Cr50 source. Therefore, we
         # need to increment TRANS_SIZE by 1.
         for word in range(0, self.trans_size + 1):
+            addr = self.start_addr + (word * 4)
+            old_value = self.ctx.ucmutex.int32_mem_read(addr)
             self.ctx.ucmutex.int32_mem_write(
-                self.start_addr + (word * 4), self.wr_data[word]
+                addr, old_value & self.wr_data[word]
             )
 
     def op_read_block(self) -> None:
