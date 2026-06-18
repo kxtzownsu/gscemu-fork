@@ -26,6 +26,10 @@ REG_DEFS = {
         "base_addr": 0x10000,
         "size": 0x10000,
     },
+    "INFO0": {  # No handler necessary
+        "base_addr": 0x20000,
+        "size": 0x800,
+    },
     "INFO1": {  # No handler necessary
         "base_addr": 0x28000,
         "size": 0x800,

@@ -81,6 +81,10 @@ def prepare_flash_space(ctx: EmulatorContext) -> None:
     )
 
     ctx.uc.mem_write(
+        REG_DEFS["INFO0"]["base_addr"], (b'\xff' * REG_DEFS["INFO0"]["size"])
+    )
+
+    ctx.uc.mem_write(
         REG_DEFS["INFO1"]["base_addr"], (b"\xff" * REG_DEFS["INFO1"]["size"])
     )
 
